@@ -333,11 +333,20 @@ export async function reviewMaterial(problemId: string, sheet0?: Sheet) {
   const { since, until } = await reviewWindow(problemId, sheet);
   const { readTalk } = await import("./talk.ts");
   const talk = (await readTalk({ problemId })).filter((t) => t.at >= since && t.at <= until).slice(-40);
-  return { sheet, meta, talk };
+  const subs = pickSubmits((await readSubmissions(problemId)).filter((x) => x.mode === "submit" && x.at >= since && x.at <= until));
+  return { sheet, meta, talk, subs };
+}
+/** 리뷰에 넣을 제출 코드(11/13 사용자 "제출할 때 주면 되겠네": AI에게 안 묻고 제출만 한 풀이도 무엇을 고쳤는지 보이게).
+ *  바로 앞과 같은 코드는 뺀다. 6개가 넘으면 첫 제출 · 판정이 바뀐 제출 · 마지막 제출을 남기고, 그래도 많으면 뒤쪽 6개. */
+export function pickSubmits(list: Submission[], max = 6): Submission[] {
+  const uniq = list.filter((x, i) => i === 0 || x.code.trim() !== list[i - 1].code.trim());
+  if (uniq.length <= max) return uniq;
+  const keep = uniq.filter((x, i) => i === 0 || i === uniq.length - 1 || x.verdict !== uniq[i - 1].verdict);
+  return keep.length <= max ? keep : [keep[0], ...keep.slice(-(max - 1))];
 }
 type Material = NonNullable<Awaited<ReturnType<typeof reviewMaterial>>>;
 /** AI에 넣는 글. range가 있으면 그 범위의 주고받은 것만(실험실의 "작은 단위", 위쪽 사실 줄은 전체로 센다). */
-export function reviewUser({ sheet, meta, talk }: Material, range?: { from: number; to: number }) {
+export function reviewUser({ sheet, meta, talk, subs = [] }: Material, range?: { from: number; to: number }) {
   const part = range ? talk.slice(range.from, range.to + 1) : talk;
   return [
     `[문제] ${meta.title}\n${meta.statement.slice(0, 1200)}`,
@@ -345,6 +354,7 @@ export function reviewUser({ sheet, meta, talk }: Material, range?: { from: numb
     `[결과] ${END_NAME[sheet.end]} · 제출 ${sheet.submits}번${Object.keys(sheet.verdicts).length ? ` (${Object.entries(sheet.verdicts).map(([k, n]) => `${VERDICT_NAME[k] ?? k} ${n}`).join(", ")})` : ""} · 예제 실행 ${sheet.examples}번 · 연 힌트 ${Math.max(0, ...talk.filter((t) => t.kind === "도움 칸").map((t) => Number(/도움 (\d)칸/.exec(t.q)?.[1] ?? 0)))}칸${sheet.skeleton ? "(뼈대 코드)" : ""} · AI에게 물은 것 ${talk.filter((t) => t.kind !== "도움 칸").length}번 · ${sheet.minutes}분`,
     range ? `[이번에 정리할 범위] 전체 ${talk.length}개 중 ${range.from + 1}~${Math.min(range.to + 1, talk.length)}번째만 보여 준다. 이 범위만 이야기로 쓴다.` : "",
     part.length ? `[푼 과정에서 주고받은 것]\n${part.map((t) => `- ${t.at.slice(11, 16)} ${t.kind}${t.verdict ? ` (그때 채점: ${VERDICT_NAME[t.verdict] ?? t.verdict})` : ""}\n  학습자: ${t.q.slice(0, 400)}\n  AI: ${t.a.slice(0, 600)}${t.code && t.kind !== "도움 칸" ? `\n  그때 코드(앞부분): ${t.code.slice(0, 1000)}` : ""}`).join("\n")}` : "[푼 과정에서 주고받은 것] 없음",
+    subs.length && !range ? `[제출한 코드] 시간 순서. 제출 사이에 무엇을 고쳤는지 볼 수 있다.\n${subs.map((x) => `- ${x.at.slice(11, 16)} 제출 · ${x.verdict === "AC" ? "맞았습니다" : VERDICT_NAME[x.verdict] ?? x.verdict}${x.total ? ` (${x.passed}/${x.total})` : ""}\n\`\`\`\n${x.code.slice(0, 1500)}\n\`\`\``).join("\n")}` : "",
     sheet.gap && !range ? `[코드가 남긴 한 줄] 그때 내 생각: ${sheet.gap}${sheet.fix ? ` / 이렇게 하면 돼요: ${sheet.fix}` : ""}` : "",
   ].filter(Boolean).join("\n\n");
 }

@@ -73,3 +73,11 @@ test("총정리 글(v19) 확인: 머리글 둘이 있어야 하고 앞 군말·�
   assert.equal(checkReviewText("다음은 리뷰예요.\n\n" + body), body);
   assert.equal(checkReviewText("# 학습 총평\n짧음"), null);
 });
+
+test("리뷰에 넣는 제출 코드: 같은 코드는 빼고, 많으면 첫·판정 바뀐·마지막", async () => {
+  const { pickSubmits } = await import("./sheets.ts");
+  const sub = (i: number, verdict: string, code: string) => ({ id: `s${i}`, at: `2026-11-13T00:0${i}:00Z`, problemId: "p", lang: "python" as const, mode: "submit" as const, verdict, passed: 0, total: 1, hints: 0, code, ms: 1 });
+  assert.deepEqual(pickSubmits([sub(1, "WA", "a"), sub(2, "WA", "a"), sub(3, "AC", "b")]).map((x) => x.id), ["s1", "s3"]);
+  const many = [sub(1, "WA", "1"), sub(2, "WA", "2"), sub(3, "WA", "3"), sub(4, "TLE", "4"), sub(5, "TLE", "5"), sub(6, "TLE", "6"), sub(7, "WA", "7"), sub(8, "AC", "8")];
+  assert.deepEqual(pickSubmits(many).map((x) => x.id), ["s1", "s4", "s7", "s8"]);
+});
