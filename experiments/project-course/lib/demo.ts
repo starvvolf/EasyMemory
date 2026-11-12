@@ -69,6 +69,33 @@ export async function demoReset(name: string) {
     else await rm(to, { force: true });
   }
   for (const g of GLOBAL) { const from = path.join(dir, "global", g); if (await exists(from)) await writeFile(path.join(DATA, g), await readFile(from)); }
+  // 지금 목표를 "방금 시작한" 상태로: 틀 시각 뒤에 쌓인 것(그 목표를 하던 흔적)은 빼고, 목표 시작 시각을 지금으로.
+  // 그래야 목표 정리 · 막힌 순간이 이번 시연에서 한 것만 본다.
+  const goalsFile = path.join(DATA, `goals/${run.id}.json`);
+  const g = JSON.parse(await readFile(goalsFile, "utf8").catch(() => "null")) as { current?: { at?: string; understood?: boolean; applied?: boolean } } | null;
+  const cut = g?.current?.at;
+  if (g?.current && cut) {
+    const later = (at?: string) => Boolean(at && at > cut);
+    for (const rel of [`goals/${run.id}.timeline.jsonl`, `goals/${run.id}.saves.jsonl`]) {
+      const f = path.join(DATA, rel);
+      if (!(await exists(f))) continue;
+      const lines = (await readFile(f, "utf8")).split("\n").filter((l) => { if (!l.trim()) return false; try { const x = JSON.parse(l) as { at?: string }; return !later(x.at); } catch { return true; } });
+      await writeFile(f, lines.length ? lines.join("\n") + "\n" : "");
+    }
+    const mf = path.join(DATA, `moments/${run.id}.json`);
+    if (await exists(mf)) {
+      const m = JSON.parse(await readFile(mf, "utf8")) as { moments?: Array<{ openedAt?: string }> };
+      if (Array.isArray(m.moments)) { m.moments = m.moments.filter((x) => !later(x.openedAt)); await writeFile(mf, JSON.stringify(m, null, 1)); }
+    }
+    const hf = path.join(DATA, "history.jsonl"); // 사람 단위 기록에서도 그 목표를 하던 흔적(원래 실습의 것)은 뺀다
+    if (await exists(hf)) {
+      const keep = (await readFile(hf, "utf8")).split("\n").filter((l) => { if (!l.trim()) return false; if (!l.includes(meta.fromRun)) return true; try { return !later((JSON.parse(l) as { at?: string }).at); } catch { return true; } });
+      await writeFile(hf, keep.length ? keep.join("\n") + "\n" : "");
+    }
+    await rm(path.join(DATA, `goals/${run.id}.ongoing.json`), { force: true });
+    g.current.at = now; g.current.understood = false; g.current.applied = false;
+    await writeFile(goalsFile, JSON.stringify(g, null, 1));
+  }
   await (await import("./learn.ts")).markChatFolder(ws).catch(() => undefined);
   await setActive(run.id);
   return { runId: run.id, chatId: chat.id, workspace: ws };
