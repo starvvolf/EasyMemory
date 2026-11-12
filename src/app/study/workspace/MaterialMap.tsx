@@ -21,6 +21,7 @@ type MapState = "new" | "met" | "unknown" | "known" | "graduated";
 type Card = { id: string; ref: string; kind: string; title: string; core: boolean; shape: Shape; pages: number[]; quotes: string[]; mistakes: string[];
   takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string; topic?: string;
   figure?: { page: number; role: string; says: string; file: string; mode?: string };
+  moreFigures?: Array<{ page: number; role: string; says: string; file: string; mode?: string }>;
   memo?: { question?: string; line?: string; answer?: string; idea?: string; facts?: string[]; details?: string[]; role?: string } };
 type Section = { id: string; title: string; pages: number[]; cards: Card[] };
 type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string; by?: string }>;
@@ -190,19 +191,22 @@ const FIG_ROLE: Record<string, string> = { 근거: "근거", 장면: "장면", �
 // 같은 그림을 쓰는 다른 카드(그림 하나가 여러 개념을 설명, 11/8): 이름을 보이고 누르면 그 카드로.
 function FigureView({ genId, c, onPage, all = [], onCard }: { genId: string; c: Card; onPage: (page: number) => void; all?: Card[]; onCard?: (id: string) => void }) {
   if (!c.figure) return null;
-  const f = c.figure;
-  const others = all.filter((x) => x.id !== c.id && x.figure?.file === f.file);
-  return (
-    <figure className={`mm9-fig r-${f.role}`}>
+  // 그림 여러 장(11/13 사용자): 첫 장 다음에 나머지를 차례로. "같이 쓰는 카드"는 첫 그림 기준.
+  const list = [c.figure, ...(c.moreFigures ?? [])];
+  const uses = (x: Card) => [x.figure?.file, ...(x.moreFigures ?? []).map((m) => m.file)];
+  return <>{list.map((f, i) => {
+    const others = all.filter((x) => x.id !== c.id && uses(x).includes(f.file));
+    return (
+    <figure key={f.file} className={`mm9-fig r-${f.role}`}>
       <button className="mm9-img" onClick={() => onPage(f.page)} title={`원문 p.${f.page}에서 보기`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/study-map/${genId}/figure/${encodeURIComponent(f.file)}`} alt={f.says || `p.${f.page} 그림`} loading="lazy" />
       </button>
-      <figcaption className="small"><span className="mm9-role">{FIG_ROLE[f.role] ?? f.role}</span>{f.says ? <Rich text={f.says} /> : null}<span className="muted"> · p.{f.page}</span></figcaption>
+      <figcaption className="small"><span className="mm9-role">{FIG_ROLE[f.role] ?? f.role}</span>{f.says ? <Rich text={f.says} /> : null}<span className="muted"> · p.{f.page}</span>{list.length > 1 ? <span className="muted"> · 그림 {i + 1}/{list.length}</span> : null}</figcaption>
       {others.length ? <div className="mm9-share small"><span className="muted">이 그림을 같이 쓰는 카드</span>{others.map((o) => onCard
         ? <button key={o.id} className="mm3-relchip" onClick={() => onCard(o.id)} title={o.figure?.says || undefined}><Rich text={o.title} /></button>
         : <span key={o.id} className="mm3-relchip" title={o.figure?.says || undefined}><Rich text={o.title} /></span>)}</div> : null}
-    </figure>);
+    </figure>); })}</>;
 }
 function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { genId: string; digest: DigestLite | null | undefined; cards: Card[]; making: boolean;
   onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {

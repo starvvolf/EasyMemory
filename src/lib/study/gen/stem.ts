@@ -127,13 +127,13 @@ export const STEM_FILL = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 
 - evidence: 이 기억을 원문에서 확인할 구절 {page, quote: 원문 그대로}. 그림에서 읽은 것이면 그림 속 글을 쓴다.
 - mistakes: 학습자가 실제로 할 법한 틀린 생각(원문으로 분명할 때만, 없으면 빈 배열).
 - takes·gives: 이 지식을 쓰려면 주어져야 하는 것, 쓰면 나오는 것(자료의 말로, 계산·판정·절차에 쓰이지 않으면 빈 배열).
-- figure: 이 기억을 가장 잘 보여 주는 그림이 쪽 이미지에 있으면 {page, box: [x0, y0, x1, y1] 쪽의 가로·세로를 0~100으로 본 퍼센트(이미지 픽셀이 아님), role: 근거(그림에서 읽은 내용) · 장면(쓰이는 장면·예) · 그림풀이(글을 그림으로), says: 그림이 보여 주는 것 한 줄}. 없으면 null.
+- figures: 이 기억을 보여 주는 그림들. 그림마다 {page, box: [x0, y0, x1, y1] 쪽의 가로·세로를 0~100으로 본 퍼센트(이미지 픽셀이 아님), role: 근거(그림에서 읽은 내용) · 장면(쓰이는 장면·예, 결과 비교) · 그림풀이(글·절차를 그림으로), says: 그림이 보여 주는 것 한 줄}. 서로 다른 것을 보여 주는 그림이면 여럿을 넣는다(예: 방법을 보여 주는 그림과 결과를 보여 주는 그림). 가장 잘 보여 주는 것부터. box는 그 그림만 감싼다(옆 글줄은 넣지 않는다). 없으면 빈 배열.
 - 바탕·곁 기억은 어디에 쓰이는지가 보이게 짧게.`;
 export const stemFillSchema = z.object({
   memories: z.array(z.object({
     memory: z.string(), title: z.string().trim().min(1), kind: z.enum(cardKinds), question: z.string(), line: z.string(), idea: z.string(), shape: shapeSchema,
     facts: z.array(z.string()), details: z.array(z.string()), evidence: z.array(z.object({ page: z.number().int(), quote: z.string() })),
-    mistakes: z.array(z.string()), takes: z.array(z.string()), gives: z.array(z.string()), figure: figureSchema.nullable(),
+    mistakes: z.array(z.string()), takes: z.array(z.string()), gives: z.array(z.string()), figures: z.array(figureSchema),
   })),
 });
 export type StemFill = z.infer<typeof stemFillSchema>;
@@ -152,12 +152,12 @@ export const STEM_FILL_QA = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)�
 - evidence: 이 기억을 원문에서 확인할 구절 {page, quote: 원문 그대로}. 그림에서 읽은 것이면 그림 속 글을 쓴다.
 - mistakes: 학습자가 실제로 할 법한 틀린 생각(원문으로 분명할 때만, 없으면 빈 배열). 화면에 안 보이고 문제를 만들 때 쓴다.
 - takes·gives: 이 지식을 쓰려면 주어져야 하는 것, 쓰면 나오는 것(자료의 말로, 계산·판정·절차에 쓰이지 않으면 빈 배열).
-- figure: 이 기억을 가장 잘 보여 주는 그림이 쪽 이미지에 있으면 {page, box: [x0, y0, x1, y1] 쪽의 가로·세로를 0~100으로 본 퍼센트(이미지 픽셀이 아님), role: 근거(그림에서 읽은 내용) · 장면(쓰이는 장면·예) · 그림풀이(글을 그림으로), says: 그림이 보여 주는 것 한 줄}. 없으면 null.
+- figures: 이 기억을 보여 주는 그림들. 그림마다 {page, box: [x0, y0, x1, y1] 쪽의 가로·세로를 0~100으로 본 퍼센트(이미지 픽셀이 아님), role: 근거(그림에서 읽은 내용) · 장면(쓰이는 장면·예, 결과 비교) · 그림풀이(글·절차를 그림으로), says: 그림이 보여 주는 것 한 줄}. 서로 다른 것을 보여 주는 그림이면 여럿을 넣는다(예: 방법을 보여 주는 그림과 결과를 보여 주는 그림). 가장 잘 보여 주는 것부터. box는 그 그림만 감싼다(옆 글줄은 넣지 않는다). 없으면 빈 배열.
 - 바탕·곁 기억은 어디에 쓰이는지가 보이게 짧게.`;
 export const stemFillQASchema = z.object({
   memories: z.array(z.object({
     memory: z.string(), title: z.string().trim().min(1), kind: z.enum(cardKinds), question: z.string(), answer: z.string(), more: z.array(z.string()),
-    evidence: z.array(z.object({ page: z.number().int(), quote: z.string() })), mistakes: z.array(z.string()), takes: z.array(z.string()), gives: z.array(z.string()), figure: figureSchema.nullable(),
+    evidence: z.array(z.object({ page: z.number().int(), quote: z.string() })), mistakes: z.array(z.string()), takes: z.array(z.string()), gives: z.array(z.string()), figures: z.array(figureSchema),
   })),
 });
 export type StemFillQA = z.infer<typeof stemFillQASchema>;
@@ -168,7 +168,7 @@ export function memoryCardQA(id: string, role: StemRole, f: StemFillQA["memories
   const answer = f.answer.trim();
   // 표로만 된 답이면 목록 줄에는 질문을 보인다(11/11 "상태 | 의미 |"가 줄에 보이던 것)
   return memoryCard(id, role, { memory: f.memory, title: f.title, kind: "사실", question: f.question, line: firstLine(answer) || f.question.trim(), idea: "", shape: { form: "fact", subject: f.title.trim(), value: answer },
-    facts: [], details: f.more, evidence: f.evidence, mistakes: f.mistakes, takes: f.takes, gives: f.gives, figure: f.figure }, pages, f.kind, answer);
+    facts: [], details: f.more, evidence: f.evidence, mistakes: f.mistakes, takes: f.takes, gives: f.gives, figures: f.figures }, pages, f.kind, answer);
 }
 
 /** 코드가 다듬는다: 영역 번호가 틀린 기억은 앞 기억의 영역으로, 쪽은 입력 안의 것만, 같은 이름은 하나로(쪽을 합침). */
@@ -243,7 +243,7 @@ export function stemFakeReply(step: string, user: string): string | undefined {
     const ids = [...user.matchAll(/^(t\d+-b\d+)\|/gm)].map((m) => m[1]);
     const page = Number(/\[p\.(\d+)\]/.exec(user)?.[1] ?? 1);
     return JSON.stringify({ memories: ids.map((id) => ({ memory: id, title: `${id} 기억`, kind: "사실", question: "무엇인가?", line: "요지", answer: "요지 한 줄", more: [], idea: "", shape: { form: "fact", subject: id, value: "값" },
-      facts: [], details: [], evidence: [{ page, quote: "" }], mistakes: [], takes: [], gives: [], figure: null })) });
+      facts: [], details: [], evidence: [{ page, quote: "" }], mistakes: [], takes: [], gives: [], figures: [] })) });
   }
   return undefined;
 }

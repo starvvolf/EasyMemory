@@ -41,7 +41,7 @@ export const cardSchema = z.object({
 });
 /** 줄기 모드(stem.ts, 11/10): 카드 한 장이 기억 하나 — 질문·요지·모양에 없는 식과 조건·역할(메인/바탕/곁). */
 export type CardMemo = { question: string; line: string; facts: string[]; /** 질문 하나 · 답 하나(11/11 lab.cardQA): 칸 없이 필요한 만큼 쓴 답(마크다운, 단계·식·표 그대로). 있으면 화면은 이것만 */ answer?: string; /** 풀이(11/11): 처음 보는 사람이 핵심을 이해하게 — 왜 나왔나 · 아이디어 · 식이 말하는 것 */ idea?: string; /** 자세히(11/11): 유도·표의 값·구현 세부 — 외울 핵심은 아닌 참고 */ details?: string[]; role: "메인" | "바탕" | "곁" };
-export type Card = z.infer<typeof cardSchema> & { figure?: CardFigure; memo?: CardMemo };
+export type Card = z.infer<typeof cardSchema> & { figure?: CardFigure; /** 그림 둘째부터 (11/13 사용자 "그림 여러 개"): 첫 그림은 figure 그대로 */ moreFigures?: CardFigure[]; memo?: CardMemo };
 
 // 카드에 붙는 그림 (2026-11-08 사용자 "그림은 카드가 아니라 카드에 붙는 것" → 시험 → "한번 해봐"): 카드 AI가 쪽 그림을 볼 때
 // 그 카드에 붙일 그림의 대략 위치(쪽을 0~100으로 본 상자)·역할·설명 한 줄을 같이 쓴다. 코드가 위치를 그림에 맞춰 잘라 둔다(quote-crop.ts).

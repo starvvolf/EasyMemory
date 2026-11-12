@@ -1036,8 +1036,10 @@ export async function runRecaller(ctx: RecallerContext) {
         const card = "answer" in f ? memoryCardQA(id, m.role, f, pages) : memoryCard(id, m.role, f, pages);
         // 글자 층에 없는 인용은 그림에서 읽은 것으로 본다(lenientQuotes처럼 빈 인용으로).
         card.evidence = card.evidence.map((e) => e.quote && !flat(texts.get(e.page) ?? "").includes(flat(e.quote)) ? { ...e, quote: "" } : e);
-        const figure = lab.figures ? cleanFigure(f.figure, pages, (n) => sizes.get(n)) : undefined;
-        out.push({ ...card, ...(figure ? { figure } : {}) });
+        // 그림 여러 장(11/13): 첫 장은 figure, 나머지는 moreFigures. 같은 쪽·같은 상자는 하나로.
+        const figs = lab.figures ? f.figures.map((x) => cleanFigure(x, pages, (n) => sizes.get(n))).filter((x): x is NonNullable<typeof x> => Boolean(x))
+          .filter((x, i, all) => all.findIndex((y) => y.page === x.page && y.box.every((v, k) => Math.abs(v - x.box[k]) < 4)) === i).slice(0, 3) : [];
+        out.push({ ...card, ...(figs[0] ? { figure: figs[0] } : {}), ...(figs.length > 1 ? { moreFigures: figs.slice(1) } : {}) });
         data.digest!.notes[id] = { topic: section.id, covers: [m.line.id] };
       }
       left = left.filter((x) => !done.has(x.line.id));

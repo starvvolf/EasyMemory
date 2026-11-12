@@ -35,9 +35,27 @@ export function figureCropper(pdf: Uint8Array, pages: number[], save: (name: str
     if (!d) { d = { file: fileOf(c.id), mode: r.mode === "block" ? "block" : "figure" }; await save(d.file, r.jpeg); done.set(key, d); }
     c.figure = { page: e.page, box: r.box, role: "근거", says: "", file: d.file, mode: d.mode, from: "quote" }; quoted++;
   };
+  // 그림 둘째부터(11/13): 위치를 준 것만 같은 방법으로 자른다. 못 자른 것·첫 그림과 같은 파일은 뺀다.
+  const more = async (c: Card) => {
+    if (!c.moreFigures?.length) return;
+    const cr = await cropper, kept: NonNullable<Card["moreFigures"]> = [];
+    for (const [i, f] of c.moreFigures.entries()) {
+      if (!f.box) continue;
+      try {
+        const r = await cr.hint(f.page, f.box);
+        if (!r) continue;
+        const key = keyOf(f.page, r.box);
+        let d = done.get(key);
+        if (!d) { d = { file: fileOf(`${c.id}_${i + 2}`), mode: r.mode === "block" ? "block" : "figure" }; await save(d.file, r.jpeg); done.set(key, d); }
+        if (d.file === c.figure?.file || kept.some((k) => k.file === d!.file)) continue;
+        kept.push({ ...f, file: d.file, mode: d.mode, from: "hint" }); hinted++;
+      } catch { /* 이 그림만 뺀다 */ }
+    }
+    if (kept.length) c.moreFigures = kept; else delete c.moreFigures;
+  };
   return {
     /** 카드 몇 장(한 주제)을 자르는 일을 줄 세운다. 실패한 카드는 그림 없이 둔다. */
-    add(cards: Card[]) { const run = work.then(async () => { for (const c of cards) { try { await one(c); } catch { delete c.figure; } } }); work = run.catch(() => undefined); return run; },
+    add(cards: Card[]) { const run = work.then(async () => { for (const c of cards) { try { await one(c); } catch { delete c.figure; } await more(c); } }); work = run.catch(() => undefined); return run; },
     async finish() { await work; await (await cropper).close(); return { ms: Date.now() - t0, hinted, quoted, files: done.size }; },
   };
 }

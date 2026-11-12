@@ -20,6 +20,8 @@ export type MapCard = {
   topic?: string;
   /** 카드에 붙은 그림 (11/8): 잘라 둔 파일은 GET /api/study-map/<id>/figure/<file> */
   figure?: { page: number; role: string; says: string; file: string; mode?: string };
+  /** 그림 둘째부터 (11/13) */
+  moreFigures?: Array<{ page: number; role: string; says: string; file: string; mode?: string }>;
   /** 줄기 모드(11/10): 이 카드가 기억 하나 — 질문·요지·모양에 없는 식과 조건·역할 */
   memo?: { question: string; line: string; answer?: string; idea?: string; facts: string[]; details?: string[]; role: "메인" | "바탕" | "곁" };
 };
@@ -79,7 +81,8 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
         questions: (asked.get(card.id) ?? 0) + same.reduce((n, s) => n + (asked.get(s.id) ?? 0), 0), same,
         state: stateOf(k), ...(k ? { knowledgeId: k.id } : {}), ...(k?.dueAt ? { dueAt: k.dueAt } : {}),
         ...(card.memo ? { memo: card.memo } : {}),
-        ...(card.figure?.file ? { figure: { page: card.figure.page, role: card.figure.role, says: card.figure.says, file: card.figure.file, ...(card.figure.mode ? { mode: card.figure.mode } : {}) } } : {}) };
+        ...(card.figure?.file ? { figure: { page: card.figure.page, role: card.figure.role, says: card.figure.says, file: card.figure.file, ...(card.figure.mode ? { mode: card.figure.mode } : {}) } } : {}),
+        ...(card.moreFigures?.some((f) => f.file) ? { moreFigures: card.moreFigures.filter((f) => f.file).map((f) => ({ page: f.page, role: f.role, says: f.says, file: f.file!, ...(f.mode ? { mode: f.mode } : {}) })) } : {}) };
     }),
   })).filter((section) => section.cards.length);
 
@@ -110,9 +113,9 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
   const pages = state.input.pageNumbers?.length ? Math.max(...state.input.pageNumbers) : Math.max(0, ...state.sections.flatMap((s) => s.pages));
   const principles = (rc.consolidated?.principles ?? []).map((p) => ({ ...p, cardIds: [...new Set(p.cardIds.map(root))].filter((id) => ids.has(id)) })).filter((p) => p.cardIds.length >= 2);
   const figs = new Map<string, MapFigure>();
-  for (const section of sections) for (const c of section.cards) if (c.figure) {
-    const f = figs.get(c.figure.file) ?? { file: c.figure.file, page: c.figure.page, uses: [] };
-    f.uses.push({ cardId: c.id, role: c.figure.role, says: c.figure.says }); figs.set(f.file, f);
+  for (const section of sections) for (const c of section.cards) for (const g of [c.figure, ...(c.moreFigures ?? [])]) if (g) {
+    const f = figs.get(g.file) ?? { file: g.file, page: g.page, uses: [] };
+    f.uses.push({ cardId: c.id, role: g.role, says: g.says }); figs.set(f.file, f);
   }
   const figures = [...figs.values()];
   return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts, ...(figures.length ? { figures } : {}), ...(state.input.questionsLater ? { questionsLater: true } : {}),
