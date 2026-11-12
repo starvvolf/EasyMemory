@@ -907,7 +907,7 @@ function goalStuckCard(g, send) {
   return h("div", { class: "gcard" }, h("div", { class: "gqq" }, "어디가 어려워요? 해당하는 걸 골라 주세요(여러 개 · 안 골라도 돼요). 여기 없으면 아래에 적어 주세요"),
     h("div", { class: "gopts col" }, g.stuckReasons.map((r) => h("button", { class: `gopt ${goalUi.reasons.has(r) ? "on" : ""}`, onclick: () => { goalUi.reasons.has(r) ? goalUi.reasons.delete(r) : goalUi.reasons.add(r); drawLesson(); } }, r))),
     h("input", { class: "gin", placeholder: "적어도 되고 안 적어도 돼요(예: cache(1)이 왜 안 되는지)", value: goalUi.stuckText, oninput: (e) => { goalUi.stuckText = e.target.value; } }),
-    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => { const reasons = [...goalUi.reasons], text = goalUi.stuckText; goalUi.stuck = false; goalUi.reasons = new Set(); goalUi.stuckText = ""; send({ do: "goal", op: "hard", reasons, text })(e); } }, "보충 로드맵 짜기"),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => { const reasons = [...goalUi.reasons], text = goalUi.stuckText; goalUi.stuck = false; goalUi.reasons = new Set(); goalUi.stuckText = ""; send({ do: "goal", op: "hard", reasons, text })(e); } }, "이걸로 도와줘요"),
       h("button", { class: "btn small", onclick: () => { goalUi.stuck = false; drawLesson(); } }, "취소")));
 }
 
