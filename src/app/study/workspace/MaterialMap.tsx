@@ -1160,7 +1160,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
           <span className="small muted"> · {map.pages}쪽 · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater || embedded ? "" : ` · 문제 ${n.questions}`}</span>
           {making ? <span className="small mm3-making"> · {board !== "off" ? "카드 쓰는 중" : map.questionsLater ? (n.cards ? "기억 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "기억 정리 중" : "자료 읽는 중"}…</span> : null}</div>
         <span className="row small">
-          {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="기억마다 확인 문제를 만들어 연습·복습에 붙여요"
+          {!embedded && map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="기억마다 확인 문제를 만들어 연습·복습에 붙여요"
             onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
           {!embedded && !map.questionsLater && n.questions && onPracticeAll ? <button className="btn small primary" title={making ? "지금까지 만들어진 문제부터 풀어요. 나머지는 계속 만들어져요." : "이 자료의 문제를 풀어요."}
             onClick={onPracticeAll}>{making ? `만든 문제부터 풀기 (${practiceLeft?.() ?? n.questions})` : `문제 풀기 (${practiceLeft?.() ?? n.questions})`}</button> : null}
