@@ -12,6 +12,7 @@ import NewMaterial from "./NewMaterial";
 import ReaderView from "./reader/ReaderView";
 import ReaderOverlays from "./reader/ReaderOverlays";
 import type { FlowApi } from "../FlowBench";
+import { setBranch } from "./shelf";
 
 /* 공부 화면 전체 (11/11 사용자 "리액트로 다 싹 다"). 상태·채점·기록·복습 날짜는 앱(dejipgi-app.js)이 들고, 이 화면은 그 값을 그린다.
    한 번 연 큰 화면(알고리즘·실습·웹 글·기억·기록·오늘·작업대)은 다른 화면에 갔다 와도 그대로 남게 숨겨 둔다(예전 viewHost와 같은 뜻). */
@@ -59,9 +60,10 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
   const A = api.apis;
   // 한 번 연 큰 화면은 남겨 둔다
   const [seen, setSeen] = useState<Set<Keep>>(() => new Set());
-  const wanted: Keep | null = s.view === "practice" && !s.session ? "web" : (KEEP as readonly string[]).includes(s.view) && !(s.view === "knowledge" && s.legacy) ? (s.view as Keep) : null;
+  // 웹 글은 이제 공부 › 자료 왼쪽 목록에 같이 있다(11/12 "같은 틀, 두 얼굴") — 웹 글 화면은 그 글을 열 때만
+  const wanted: Keep | null = (KEEP as readonly string[]).includes(s.view) && !(s.view === "knowledge" && s.legacy) ? (s.view as Keep) : null;
   if (wanted && !seen.has(wanted)) setSeen(new Set([...seen, wanted]));
-  const shown = (k: Keep) => (k === "web" ? s.view === "web" || (s.view === "practice" && !s.session) : s.view === k && !(k === "knowledge" && s.legacy));
+  const shown = (k: Keep) => (k === "web" ? s.view === "web" : s.view === k && !(k === "knowledge" && s.legacy));
   const keep = (k: Keep, node: ReactNode) => seen.has(k) || wanted === k ? <div key={k} className={`view-host view-${k}`} hidden={!shown(k)}>{node}</div> : null;
 
   const studyNav = s.view === "code" || s.view === "project" || s.view === "web" || s.view === "start" || (s.view === "practice" && !s.session);
@@ -81,7 +83,7 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
           <div className="seg study-seg" role="tablist" aria-label="공부 종류">
             {/* 11/9 사용자 "웹글 PDF 그냥 하나로 합치는 거지 UI를": PDF 자료·웹 글 갈래를 "자료" 하나로(웹 글은 자료 목록 아래에). */}
             {[["practice", "자료"], ["code", "알고리즘"], ["project", "실습"]].map(([v, label]) => (
-              <button key={v} role="tab" aria-selected={navActive === v} className={navActive === v ? "on" : ""} onClick={() => (v === "practice" ? api.leaveToPractice() : api.tab(v))}>{label}</button>
+              <button key={v} role="tab" aria-selected={navActive === v} className={navActive === v ? "on" : ""} onClick={() => { setBranch(v === "practice" ? "material" : (v as "code" | "project")); if (v === "practice") api.leaveToPractice(); else api.tab(v); }}>{label}</button>
             ))}
           </div>
           {navActive === "practice" ? <button className="btn primary small" onClick={() => api.go("create")}>+ 새 자료</button> : null}
@@ -95,7 +97,6 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
         {keep("code", <CodeStudy />)}
         {keep("project", <ProjectStudy />)}
         {(s.view === "practice" && !s.session) || s.view === "start" ? <MaterialList ui={ui} api={A.materials} /> : null}
-        {s.view === "practice" && !s.session ? <h3 className="study-sub">웹 글</h3> : null}
         {keep("web", <WebStudy />)}
         {s.view === "practice" && s.session ? <PracticeSession ui={ui} api={A.session} /> : null}
         {keep("plan", <PlanView />)}

@@ -405,6 +405,8 @@ const NAV = { stack:[], from:"home", back:false };
 function setView(v){
   if (S.view && S.view !== v && !NAV.back){ NAV.stack.push(S.view); if (NAV.stack.length > 30) NAV.stack.shift(); }
   NAV.back = false;
+  // 공부 탭의 갈래는 기억 탭과 같이 (11/12 "같은 틀, 두 얼굴")
+  if (v === "code" || v === "project" || v === "practice"){ const b = v === "practice" ? "material" : v; try{ localStorage.setItem("recaller:lib-branch", b); }catch(e){} try{ window.dispatchEvent(new CustomEvent("recaller:branch", { detail:b })); }catch(e){} }
   if (v !== "read" && v !== "practice") NAV.from = v; else if (v === "practice" && !S.session) NAV.from = v;
   // 11/11 사용자 "자료 지도에서 [오늘] 눌러도 아무 반응 없음": 위에 떠 있는 자료 지도·원문 보기가 바뀐 화면을 가렸다. 다른 화면으로 가면 닫는다.
   if (typeof SourcePeek !== "undefined") SourcePeek.close();
@@ -659,7 +661,12 @@ const shellApi = {
       store:Store.mode, toast:S.toast ? S.toast.msg : "", tablet:tabletView(), prompts:!!notesApi,
       knowledgeLegacy: S.view === "knowledge" && S.kp.legacy ? legacyKnowledgeView() : null, flow: !!(env.notes && env.notes.compose && env.mountFlow) };
   },
-  tab: (v) => { if (S.session && v !== "practice" && v !== "read") S.session = null; setView(v); },
+  tab: (v) => {
+    if (S.session && v !== "practice" && v !== "read") S.session = null;
+    // 11/12 "같은 틀, 두 얼굴": 기억 탭에서 보던 갈래(자료 · 알고리즘 · 실습)로 공부 탭이 열린다
+    if (v === "practice" && !S.session && S.view !== "practice"){ let b = ""; try{ b = localStorage.getItem("recaller:lib-branch") || ""; }catch(e){} if (b === "code" || b === "project"){ setView(b); return; } }
+    setView(v);
+  },
   go: (v) => setView(v),
   leaveToPractice: () => { S.session = null; setView("practice"); },
   legacy: (on) => { S.kp.legacy = on; render(); },

@@ -9,12 +9,13 @@ import { call, errorText, go, handoff, later, type ItemLite, type Tree } from ".
 import { MaterialArticle, StateChip, tidyLine, type MaterialRow } from "./KnowledgeWindow";
 import LearnerNote from "./LearnerNote";
 import { MemoryShelf } from "./MaterialMap";
+import { BRANCH_KEY, loadShelfRows, materialEntries, setBranch as shareBranch, shelfSel } from "./shelf";
 import { Inline, Rich } from "./Rich";
 import "./library.css";
 
 type Branch = "material" | "code" | "project";
 const BRANCHES: Array<[Branch, string]> = [["material", "자료"], ["code", "알고리즘"], ["project", "실습"]];
-const KEY = "recaller:lib-branch";
+const KEY = BRANCH_KEY;
 type Entry = { key: string; branch: Branch; icon: string; title: string; sub: string; lastAt: string; itemIds: string[]; row?: MaterialRow; runId?: string; pages?: number; log?: SolveLog;
   /** 같은 PDF를 다시 만든 예전 실행(11/11): 목록에는 최신 하나만, 예전 것은 내용 머리에서 고른다 */ older?: Entry[] };
 type RunRow = { id: string; title: string; createdAt: string; lastAt: string; ended: boolean; goals: number; cards: number; moments: number; gaps: number };
@@ -36,19 +37,12 @@ export default function Library() {
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     try {
-      const [v, t, g, lib] = await Promise.all([call<{ materials: MaterialRow[] }>("/api/knowledge/material-view"), call<Tree>("/api/knowledge"),
-        call<{ runs: Array<{ id: string; createdAt: string; status: string; fileName: string; pages: number[]; sectionCount?: number }> }>("/api/lab/gen?origin=study").catch(() => ({ runs: [] })),
+      const [shelfRows, t, lib] = await Promise.all([loadShelfRows(), call<Tree>("/api/knowledge"),
         call<{ online: boolean; runs: RunRow[] }>("/api/project-course/library").catch(() => ({ online: false, runs: [] as RunRow[] }))]);
       // 알고리즘: 기억 줄이 아니라 문제마다 풀이 일지(PS 튜터, B의 /api/code/tutor/logs)
       void call<{ logs: SolveLog[] }>("/api/code/tutor/logs").then((r) => setLogs(r.logs)).catch(() => setLogs([]));
-      // 자료(PDF)는 실제로 만든 자료(study-gen) 기준, 기억은 같은 자료 줄(genId)에서 가져온다
-      const pdfRows = v.materials.filter((r) => r.group === "material" && r.kind === "pdf");
-      const pdfs: MaterialRow[] = g.runs.filter((r) => r.status === "done" || r.status === "cards").map((r) => {
-        const same = pdfRows.find((x) => x.genId === r.id);
-        return { key: `gen:${r.id}`, group: "material", kind: "pdf", title: r.fileName.replace(/\.pdf$/i, ""), items: same?.items ?? r.sectionCount ?? 0, itemIds: same?.itemIds ?? [],
-          lastAt: same?.lastAt && same.lastAt > r.createdAt ? same.lastAt : r.createdAt, keys: same?.keys ?? [], folderId: null, genId: r.id, pages: r.pages.length } as MaterialRow & { pages: number };
-      });
-      setRows([...pdfs, ...v.materials.filter((r) => !(r.group === "material" && r.kind === "pdf"))]); setItems(t.items);
+      // 자료(PDF)는 실제로 만든 자료(study-gen) 기준, 기억은 같은 자료 줄(genId)에서 — 공부 탭과 같은 목록(shelf.ts)
+      setRows(shelfRows); setItems(t.items);
       setRuns(lib.runs); setRunsOnline(lib.online);
     } catch (e) { setError(errorText(e)); }
   }, []);
@@ -64,18 +58,8 @@ export default function Library() {
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
   const entries = useMemo<Entry[]>(() => {
-    const allMat: Entry[] = (rows ?? []).filter((r) => r.group === "material").map((r) => ({ key: r.key, branch: r.group as Branch, row: r, itemIds: r.itemIds, lastAt: r.lastAt, title: r.title,
-      icon: r.kind === "web" ? "🌐" : r.group === "code" ? "⌨" : "📄", pages: (r as MaterialRow & { pages?: number }).pages,
-      // PDF 기억 수는 자료 지도의 카드 수(펼치면 보임) — 저장소 항목 수는 합쳐진 수라 다르다(11/11 지도 32 · 도서관 27)
-      sub: r.key.startsWith("gen:") ? `${(r as MaterialRow & { pages?: number }).pages ?? "?"}쪽` : `기억 ${r.items}` }));
-    // 같은 PDF(같은 제목 · 같은 쪽 수)를 여러 번 만들었으면 최신 하나만 목록에(11/11 — 기억 저장소가 같은 이름을 합쳐 예전 실행 글이 섞여 보였다)
-    const latest = new Map<string, Entry>();
-    for (const e of [...allMat].sort((a, b) => b.lastAt.localeCompare(a.lastAt))) {
-      const k = e.key.startsWith("gen:") ? `${e.title}|${e.pages ?? ""}` : e.key;
-      const top = latest.get(k);
-      if (top) (top.older ??= []).push(e); else latest.set(k, e);
-    }
-    const mat = [...latest.values()].map((e) => e.older?.length ? { ...e, sub: `${e.sub} · ${e.older.length + 1}번 만듦` } : e);
+    // PDF 기억 수는 자료 지도의 카드 수(펼치면 보임). 같은 PDF는 최신 하나 + 예전 것(11/11). 공부 탭과 같은 목록(shelf.ts, 11/12)
+    const mat: Entry[] = materialEntries(rows ?? []);
     // 실습: 실습 서버의 대화 실습 한 줄씩 + 그 실습에서 앱 기억으로 넘어간 것(ref project:<runId>)
     const projRows = (rows ?? []).filter((r) => r.group === "project");
     const proj: Entry[] = (runs ?? []).map((r) => {
@@ -92,8 +76,18 @@ export default function Library() {
   }, [rows, runs, logs]);
   const list = entries.filter((e) => e.branch === branch && (!q.trim() || e.title.toLowerCase().includes(q.trim().toLowerCase())));
   const cur = entries.find((e) => e.key === sel) ?? null;
-  const pick = (b: Branch) => { setBranch(b); setSel(null); setItemId(null); try { localStorage.setItem(KEY, b); } catch { /* storage off */ } };
-  const choose = (k: string | null) => { setSel(k); setItemId(null); };
+  const pick = (b: Branch) => { setBranch(b); setSel(null); setItemId(null); shareBranch(b); };
+  // 고른 자료는 공부 탭과 함께(11/12 "같은 틀, 두 얼굴"): 공부에서 고른 자료가 여기서도 골라져 있다
+  const choose = (k: string | null) => { setSel(k); setItemId(null); if (k && entries.find((e) => e.key === k)?.branch === "material") shelfSel.set(k); };
+  useEffect(() => shelfSel.on((k) => { if (k) { setBranch("material"); setSel(k); setItemId(null); } }), []);
+  useEffect(() => { const on = (e: Event) => { const b = (e as CustomEvent<Branch>).detail; if (b) setBranch(b); }; window.addEventListener("recaller:branch", on); return () => window.removeEventListener("recaller:branch", on); }, []);
+  // 처음 열 때, 공부 탭에서 고른 자료가 있으면 그것(예전 실행이면 그 묶음 줄)
+  useEffect(() => {
+    if (sel || !rows) return;
+    const k = shelfSel.get(); if (!k) return;
+    const top = entries.find((e) => e.key === k || e.older?.some((o) => o.key === k));
+    if (top && branch === "material") later(() => setSel(top.key));
+  }, [rows, entries, sel, branch]);
 
   // 화면 높이에 맞춰 세 칸이 각자 스크롤되게(앱 머리 아래부터 창 끝까지)
   const box = useRef<HTMLDivElement>(null);
@@ -112,11 +106,13 @@ export default function Library() {
     : branch === "code" ? "아직 푼 문제가 없어요. 알고리즘 문제를 풀면 풀이 노트가 여기 꽂혀요." : !runsOnline ? "실습 서버가 꺼져 있어 실습 목록을 못 불러왔어요. 실습 탭을 열면 켜져요." : "아직 실습 기록이 없어요.";
 
   return (
+    <>
+    {/* 갈래 단추는 공부 탭과 같은 자리 · 같은 모양(11/12 "같은 틀, 두 얼굴") */}
+    <div className="study-nav lib-nav"><div className="seg study-seg" role="tablist" aria-label="기억 갈래">{BRANCHES.map(([b, label]) => (
+      <button key={b} role="tab" aria-selected={branch === b} className={branch === b ? "on" : ""} onClick={() => pick(b)}>{label}</button>
+    ))}</div><span className="small muted">{(branch === "code" ? logs : branch === "project" ? runs : rows) ? `${counts(branch)}개` : ""}</span></div>
     <div className="lib" ref={box} style={h ? { height: h } : undefined}>
       <aside className="lib-side" aria-label="기억 목록">
-        <div className="lib-seg" role="tablist" aria-label="기억 갈래">{BRANCHES.map(([b, label]) => (
-          <button key={b} role="tab" aria-selected={branch === b} className={branch === b ? "on" : ""} onClick={() => pick(b)}>{label}{(b === "code" ? logs : b === "project" ? runs : rows) ? <small>{counts(b)}</small> : null}</button>
-        ))}</div>
         <input className="lib-find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="제목으로 찾기" aria-label="목록에서 찾기" />
         <nav className="lib-list">
           {branch === "project" ? <button className={`lib-row pin${sel === "note" ? " on" : ""}`} onClick={() => choose("note")}>
@@ -142,6 +138,7 @@ export default function Library() {
           where={itemId ? `기억 하나: ${byId.get(itemId)?.title ?? ""}` : sel === "note" ? "나의 학습 노트" : cur ? `${BRANCHES.find((b) => b[0] === cur.branch)?.[1]} · ${cur.title}` : `${BRANCHES.find((b) => b[0] === branch)?.[1]} 목록`} />
       </section>
     </div>
+    </>
   );
 }
 
@@ -179,6 +176,7 @@ function EntryView({ e: top, byId, onItem }: { e: Entry; byId: Map<string, ItemL
       {top.older?.length ? <select className="lib-runs" value={e.key} onChange={(x) => setPickKey(x.target.value)} aria-label="만든 때 고르기">
         {[top, ...top.older].map((x, i) => <option key={x.key} value={x.key}>{i ? "예전 · " : "최신 · "}{day(x.lastAt)} {x.title === top.title ? "" : x.title}</option>)}</select> : null}
       <button className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: e.row!.genId } }))}>자료 지도 열기 ↗</button>
+      <button className="btn small primary" onClick={() => { shelfSel.set(e.key); go("practice"); }}>← 공부하러 가기</button>
     </Head>
     <MemoryShelf genId={e.row.genId} title={e.title} />
   </>;
