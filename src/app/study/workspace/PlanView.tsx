@@ -71,7 +71,7 @@ export default function PlanView() {
         </div>
         {week.studied?.length ? (
           <ul className="pl-studied">{week.studied.map((s) => (
-            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[kindOf(s)] ?? s.kind}</span><span className="pl-st-title">{s.kind === "review" ? "기억 복습" : s.title.replace(/^실습: /, "")}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
+            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[kindOf(s)] ?? s.kind}</span><span className="pl-st-title">{s.kind === "review" ? "기억 복습" : s.title === "PS 튜터" ? "문제 풀이" : s.title.replace(/^실습: /, "")}</span><span className="small muted num">{s.n}번 · {new Date(s.last).getMonth() + 1}/{new Date(s.last).getDate()}</span></li>))}
           </ul>
         ) : <p className="small muted">이 주에는 기록이 없어요.</p>}
       </section>
