@@ -44,7 +44,7 @@ svg{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
 <div class="box blue" style="left:218px;top:190px;width:250px;height:196px"><span class="chip" style="color:var(--blueb)">자료</span>
   <h3 style="margin-top:8px">자료 지도</h3><p>PDF를 넣으면 기억 목록(줄기)·카드<br>줄기 · 구조 · 강의 · 문제 풀기</p></div>
 <div class="box green" style="left:484px;top:190px;width:250px;height:196px"><span class="chip" style="color:var(--greenb)">알고리즘</span>
-  <h3 style="margin-top:8px">PS 튜터</h3><p>문제 · 테스트 채점<br>도움 네 칸 · 혼자 다시 풀기<br>풀이 노트 총정리</p></div>
+  <h3 style="margin-top:8px">PS 튜터</h3><p>문제 · 테스트 채점 · 튜터 채팅<br>도움 네 칸 · 혼자 다시 풀기<br>맞히면 리뷰 진행 → 기억 탭 풀이 노트</p></div>
 <div class="box violet" style="left:750px;top:190px;width:234px;height:196px"><span class="chip" style="color:var(--violetb)">실습</span>
   <h3 style="margin-top:8px">VS Code + 튜터</h3><p>목표 세우기 → 직접 만들기<br>→ 튜터와 검사<br>실습 한 판 정리</p></div>
 
@@ -57,7 +57,7 @@ svg{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
 <div class="band" style="top:440px;height:230px"></div>
 <div class="blabel" style="top:454px"><b>② 앱 서버</b>내 PC<br>127.0.0.1:3000<br>(Next.js)</div>
 <div class="box blue" style="left:218px;top:462px;width:250px;height:124px"><h3>자료 엔진</h3><p>PDF → 줄기 계획 → 카드 채우기<br>강의 · 문제는 누를 때 만듦</p><small>/api/lab/gen · study-map</small></div>
-<div class="box green" style="left:484px;top:462px;width:250px;height:124px"><h3>알고리즘</h3><p>문제 · 코드 채점(코드가 판정)<br>튜터 도움 · 풀이 기록</p><small>/api/code</small></div>
+<div class="box green" style="left:484px;top:462px;width:250px;height:124px"><h3>알고리즘</h3><p>문제 · 코드 채점(코드가 판정)<br>튜터 · 풀이 총정리 · 풀이 기록</p><small>/api/code</small></div>
 <div class="box violet" style="left:750px;top:462px;width:234px;height:124px"><h3>실습</h3><p>실습 판 · 목표 · 튜터<br>↔ 실습 코스 서버</p><small>/api/project-course</small></div>
 <div class="box pink" style="left:1030px;top:462px;width:390px;height:190px"><h3>기억 저장소 <span style="font-weight:400;font-size:13px;color:var(--sub)">(셋이 같이 쓰는 바닥)</span></h3>
   <p>기억 = 뜻(카드) + 경험(맞힘·틀림·막힌 곳)<br>같은 기억은 하나로 합치기<br>복습 날짜 계산 · 오늘 낼 문제 고르기<br>내 기억을 보고 답하는 묻기</p><small>/api/knowledge · lib/knowledge/api.ts</small></div>
@@ -98,7 +98,7 @@ svg{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
 <text x="1015" y="232" font-size="11" fill="#d0435b" font-weight="700" text-anchor="middle">같은</text><text x="1015" y="246" font-size="11" fill="#d0435b" font-weight="700" text-anchor="middle">틀</text>
 </svg>
 <div class="blabel" style="top:706px"><b>③ 바깥과<br>켜고 끄기</b></div>
-<div class="box amber" style="left:218px;top:714px;width:516px;height:110px"><h3>AI · ChatGPT 로그인</h3><p>기본 gpt-6.1-terra · low. 만들고 돕기만 한다:<br>카드·강의·문제 만들기, 튜터, 기억 묻기, 같은 기억 판정</p></div>
+<div class="box amber" style="left:218px;top:714px;width:516px;height:110px"><h3>AI · ChatGPT 로그인</h3><p>기본 gpt-6.1-terra · low. 만들고 돕기만 한다:<br>카드·강의·문제 만들기, 튜터·풀이 총정리, 기억 묻기, 같은 기억 판정</p></div>
 <div class="box violet" style="left:750px;top:714px;width:234px;height:110px;background:#fff"><h3>실습 코스 서버 :4100</h3><p>VS Code 연결 확장<br>OpenCode 튜터</p></div>
 <div class="box" style="left:1030px;top:714px;width:510px;height:110px"><h3>데이터 폴더 RecallerData</h3><p>자료 · 기억 · 기록이 파일로 남는 곳 (비공개 git 저장소)<br>켤 때 받고, 끌 때 올린다 → 다른 PC에서도 이어서</p></div>
 <div class="box" style="left:218px;top:840px;width:1322px;height:84px;background:#f2f3f6;border-style:dashed"><h3 style="font-size:16px">Recaller 앱 창 (Electron) — 켜고 끄는 유일한 길</h3>
