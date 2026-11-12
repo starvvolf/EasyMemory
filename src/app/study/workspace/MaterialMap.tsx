@@ -1251,7 +1251,7 @@ function ShelfCard({ genId, c, onPage, all, onCard }: { genId: string; c: Card; 
   const role = roleOfCard(c);
   return <>
     <button className={`shelf-row${open ? " on" : ""}${roleClass(role)}`} onClick={() => setOpen(!open)} aria-expanded={open}>
-      <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /><RoleChip role={role} /><b className="shelf-t"><Rich text={c.title} /></b>
+      <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /><b className="shelf-t"><RoleChip role={role} /><Rich text={c.title} /></b>
       <span className="shelf-l">{open ? null : <Rich text={rowLine(c)} />}</span>
       {dueNow(c) ? <span className="shelf-due">복습 차례</span> : null}
     </button>
