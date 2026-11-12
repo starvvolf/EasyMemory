@@ -6,7 +6,7 @@
 //   채팅은 기존 /api/knowledge/ask(내 기억 전체 요약 + 지금 화면 글 + 관련 기억)를 쓴다. 묻는 만큼 AI 사용량이 든다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { call, errorText, go, handoff, later, type ItemLite, type Tree } from "./api";
-import { MaterialArticle, StateChip, tidyLine, type MaterialRow } from "./KnowledgeWindow";
+import { MaterialArticle, StateChip, tidyLine, type MaterialRow } from "./knowledgeParts";
 import LearnerNote from "./LearnerNote";
 import { MemoryShelf } from "./MaterialMap";
 import { BRANCH_KEY, loadShelfRows, materialEntries, setBranch as shareBranch, shelfSel } from "./shelf";

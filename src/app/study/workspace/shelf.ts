@@ -1,7 +1,7 @@
 // 자료 목록 하나를 공부 탭과 기억 탭이 같이 쓴다 (11/12 사용자 "공부 탭이랑 기억 탭이 자연스럽게 이어지게" → "같은 틀, 두 얼굴").
 // 같은 목록 · 같은 순서 · 같은 묶음(같은 PDF는 최신 하나 + 예전 것), 고른 자료도 두 탭이 함께 기억한다.
 import { call } from "./api";
-import type { MaterialRow } from "./KnowledgeWindow";
+import type { MaterialRow } from "./knowledgeParts";
 
 export type ShelfRow = MaterialRow & { pages?: number };
 export type ShelfEntry = { key: string; branch: "material"; icon: string; title: string; sub: string; lastAt: string; itemIds: string[]; row: ShelfRow; pages?: number; older?: ShelfEntry[] };

@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { call, errorText, type Question } from "./api";
 import { QuestionRun } from "./QuestionCard";
-import { StateChip } from "./KnowledgeWindow";
+import { StateChip } from "./knowledgeParts";
 
 export type GoalId = "terms" | "claim" | "chains" | "recognize";
 export type SourceView = {

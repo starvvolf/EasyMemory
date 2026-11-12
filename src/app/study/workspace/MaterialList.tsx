@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RichInline } from "./Rich";
 import { useBridge, type Bridge } from "./bridge";
 import { call, errorText, go, later } from "./api";
-import type { MaterialRow } from "./KnowledgeWindow";
+import type { MaterialRow } from "./knowledgeParts";
 import { BRANCH_KEY, loadShelfRows, materialEntries, projectOpen, setBranch, shelfSel, type ShelfEntry } from "./shelf";
 import "./library.css";
 import MaterialMap from "./MaterialMap";
