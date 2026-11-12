@@ -3,7 +3,8 @@
 // 돌려 처음 틀린 하나만 보여 준다. Whether the code is right is the judge's call; the AI next to the code explains,
 // hints in three steps, checks an approach before submitting and looks for a counterexample.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { call, errorText, handoff, later, shareContext } from "./api";
+import { call, errorText, go, handoff, later, shareContext } from "./api";
+import { ReviewAfterSolve } from "./ReviewProgress";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
 import PsTutor from "./PsTutor";
@@ -200,6 +201,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [result, setResult] = useState<(Judged & { mode: "example" | "submit" }) | null>(null);
   const [custom, setCustom] = useState<{ open: boolean; input: string; out: string }>({ open: false, input: "", out: "" });
   const [running, setRunning] = useState("");
+  const [reviewPid, setReviewPid] = useState(""); // 맞힌 뒤 리뷰 진행 카드(11/12)
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [hints, setHints] = useState(0);
   // 도움 네 칸(11/11): 작은 도움부터 차례로. 재료(교육용 문제 모델)가 있는 문제에서만 나온다. 연 칸은 서버가 튜터 기록에 남긴다.
@@ -377,7 +379,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         if (r.verdict === "AC") {
           touched.current = false;
           memo({ state: "saving", text: "이 문제를 기억에 정리하는 중이에요" });
-          void call<{ sheet: SheetLite | null }>(`/api/code/problem/${id}/sheet`).then((x) => memo({ state: "done", text: sheetLine(x.sheet) })).catch(() => memo({ state: "hide" }));
+          // 문제 한 장이 써지면 리뷰(총정리)가 뒤에서 만들어진다(11/12): 그 진행을 카드로 보여 주고, 다 되면 "리뷰 보기".
+          void call<{ sheet: SheetLite | null }>(`/api/code/problem/${id}/sheet`).then((x) => { memo({ state: "done", text: sheetLine(x.sheet) }); if (x.sheet) setReviewPid(id); }).catch(() => memo({ state: "hide" }));
         }
       }
     } catch (e) { setError(errorText(e)); } finally { setRunning(""); }
@@ -474,6 +477,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const shownMsgs = training ? msgs.filter((m) => m.step === trainStep) : msgs;
   return (
     <div className="cs-solve" ref={solveRef}>
+      {reviewPid === id ? <ReviewAfterSolve pid={id} number={/(\d{3,6})/.exec(problem.title)?.[1]} onClose={() => setReviewPid("")}
+        onOpen={(key) => { setReviewPid(""); handoff.libraryKey = key; go("knowledge"); setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:library-open", { detail: { key } })), 80); }} /> : null}
       <section className="cs-statement panel">
         <div className="row" style={{ justifyContent: "space-between" }}><button className="btn ghost small" onClick={onBack}>← 문제 목록</button></div>
         {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}

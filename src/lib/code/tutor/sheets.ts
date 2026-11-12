@@ -383,10 +383,20 @@ export async function runReviewLab(input: { problemId: string; range?: { from: n
   return run;
 }
 const reviewing = new Map<string, Promise<Review | null>>();
-/** 이 문제의 마지막 장의 총정리(없으면 만든다). */
+/** 만드는 중인 총정리의 지금까지 글과 듣는 쪽(11/12 사용자 "리뷰를 제작 중입니다… 뭐 하고 있는지"): 끝날 때 뒤에서 시작된 것을
+ *  나중에 연 화면(문제 화면의 진행 카드, 풀이 노트)도 이어서 받는다. */
+const reviewLive = new Map<string, { text: string; listeners: Set<(soFar: string) => void> }>();
+/** 이 문제의 마지막 장의 총정리(없으면 만든다). 이미 만드는 중이면 그 일에 붙어서 지금까지의 글부터 받는다. */
 export function reviewFor(problemId: string, onText?: (soFar: string) => void): Promise<Review | null> {
   const running = reviewing.get(problemId);
-  if (running) return running;
+  if (running) {
+    const live = reviewLive.get(problemId);
+    if (live && onText) { live.listeners.add(onText); if (live.text) onText(live.text); void running.finally(() => live.listeners.delete(onText)); }
+    return running;
+  }
+  const live = { text: "", listeners: new Set<(soFar: string) => void>(onText ? [onText] : []) };
+  reviewLive.set(problemId, live);
+  const tell = (t: string) => { live.text = t; for (const f of live.listeners) { try { f(t); } catch { /* 화면이 닫힘 */ } } };
   const job = (async () => {
     const sheet = await reviewTarget(problemId);
     if (!sheet) return null;
@@ -396,12 +406,12 @@ export function reviewFor(problemId: string, onText?: (soFar: string) => void): 
     const user = reviewUser(mat);
     const { REVIEWER3_SYSTEM, REVIEWER3_FORMAT } = await import("./review-presets.ts");
     // 글로 받는다(11/12 실험: JSON보다 출력이 짧고 받는 중에도 그대로 보인다). 코드는 머리글이 있는지와 길이만 확인한다.
-    const text = await askText("code:review-sheet", `${REVIEWER3_SYSTEM}\n\n${REVIEWER3_FORMAT}`, user, onText ? { onText } : {}).catch(() => "");
+    const text = await askText("code:review-sheet", `${REVIEWER3_SYSTEM}\n\n${REVIEWER3_FORMAT}`, user, { onText: tell }).catch(() => "");
     const md = checkReviewText(text);
     const review: Review | null = md ? { v: 19, md } : null;
     if (review) await writeSheet({ ...sheet, review });
     return review;
-  })().finally(() => reviewing.delete(problemId));
+  })().finally(() => { reviewing.delete(problemId); reviewLive.delete(problemId); });
   reviewing.set(problemId, job);
   return job;
 }

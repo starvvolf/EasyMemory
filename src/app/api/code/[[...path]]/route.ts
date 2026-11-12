@@ -247,6 +247,7 @@ async function inner(request: Request, context: RouteContext) {
           const stream = new ReadableStream({ start(ctrl) {
             const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { /* 화면이 닫힘 */ } };
             let last = 0;
+            send({ facts }); // 진행 카드가 "대화 n개 읽기"를 바로 그리게 먼저 보낸다
             void reviewFor(id, (t) => { if (t.length - last >= 24) { last = t.length; send({ t }); } })
               .then((review) => send({ done: true, review, facts })).catch((e) => send({ error: (e as Error)?.message || "정리하지 못했어요." }))
               .finally(() => { try { ctrl.close(); } catch { /* 이미 닫힘 */ } });
