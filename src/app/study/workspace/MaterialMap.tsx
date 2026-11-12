@@ -1152,7 +1152,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
     <div className={`mm2 mm3${shownTab === "structure" && !embedded ? " mm3-wide" : ""}${embedded ? " mm3-embed" : ""}`} role={embedded ? undefined : "dialog"} aria-label="자료 지도">
       <div className="mm2-head">
         <div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>{map.title.replace(/\.pdf$/i, "")}</b>
-          <span className="small muted"> · {map.pages}쪽 · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater ? "" : ` · 문제 ${n.questions}`}</span>
+          <span className="small muted"> · {map.pages}쪽 · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater || embedded ? "" : ` · 문제 ${n.questions}`}</span>
           {making ? <span className="small mm3-making"> · {board !== "off" ? "카드 쓰는 중" : map.questionsLater ? (n.cards ? "기억 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "기억 정리 중" : "자료 읽는 중"}…</span> : null}</div>
         <span className="row small">
           {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="기억마다 확인 문제를 만들어 연습·복습에 붙여요"
