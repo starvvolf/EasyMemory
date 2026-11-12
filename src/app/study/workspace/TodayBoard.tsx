@@ -1,24 +1,14 @@
 "use client";
-// 오늘: 두 칸만 (2026-11-06 사용자 "딱 두 가지로, 문제 풀기랑 이어서 하기, 조잡하지 않게"). 문제 풀기를 누르면 무엇을 풀지
-// 고르는 목록이 열리고(지식 복습·PDF 문제·틀린 알고리즘·알고리즘 문제·미리 연습), 이어서 하기는 자료·알고리즘·실습마다 마지막 하나(11/9).
-// 기한·할 일 칩은 뺐다(일정 탭에서 할 일·기한을 없앰).
-// 11/13 사용자 "문제 풀기 갖다 버리고": 기억 복습과 옛 PDF 문제 연습(따로 날짜 계산)을 숫자 하나로 섞어 보여 주던 [문제 풀기] 칸을 뺐다.
-// 그 자리에 "오늘 다시 볼 것"(사용자 "그거 한번 넣어봐"): 갈래마다 다시 묻는 방식대로 한 줄씩 — 자료는 최근 PDF의 약한 카드(기억 탭으로), 알고리즘은
-// 도움 받고 푼 문제 혼자 다시(PS 튜터의 할 일) · 알고리즘 기억, 실습은 다시 확인. 맨 위 "오늘 이것부터"는 코드가 고른 가장 급한 하나
-// (몰랐던 자료 카드 > 혼자 다시 풀 문제 > 실습 다시 확인 > 나머지). 날짜와 순서는 기억 저장소의 복습 차례 그대로다.
+// 오늘: 이어서 하기 한 칸 (11/13 사용자 "오늘 다시 볼 것 그냥 빼라. 이어서 하기만 냅둬. 안 쓰는 거 계속 연결돼 있어").
+// 11/6 [문제 풀기] + [이어서 하기] → 11/13 [문제 풀기] 뺌, "오늘 다시 볼 것"을 넣었다가 같은 날 뺐다(예전 기억 · 옛 문제 묶음이 섞여 나옴).
+// 이어서 하기는 자료·알고리즘·실습마다 가장 최근에 한 것 하나(11/9).
 import { useCallback, useEffect, useState } from "react";
-import { call, go, later, type ItemLite, type Question } from "./api";
-import { QuestionRun } from "./QuestionCard";
-import { shelfSel } from "./shelf";
+import { call, go, later } from "./api";
 
 type ProblemLite = { id: string; title: string; status: "new" | "tried" | "wrong" | "solved"; lastAt: string };
 type SourceLite = { id: string; title: string; readAt: string; goals: Record<string, { done: boolean }> };
 type Studied = { kind: string; title: string; ref: string; n: number; last: string };
 type Last = { kind: string; title: string; at: string; open: () => void; note: string };
-type Origin = "theory" | "algo" | "lab";
-type TutorAction = { number: string; pattern: string; why: string; redo?: boolean };
-type MatWeak = { gen: string; title: string; weak: number; unseen: number };
-type Due = { key: string; label: string; count: string; why: string; go: () => void; weight: number };
 const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
   return m < 60 ? `${m || 1}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`;
@@ -28,55 +18,14 @@ export default function TodayBoard() {
   const [problems, setProblems] = useState<ProblemLite[]>([]);
   const [sources, setSources] = useState<SourceLite[]>([]);
   const [studied, setStudied] = useState<Studied[]>([]);
-  const [due, setDue] = useState<Record<Origin, ItemLite[]> | null>(null);
-  const [mat, setMat] = useState<MatWeak | null>(null);
-  const [redo, setRedo] = useState<TutorAction[]>([]);
-  const [run, setRun] = useState<{ title: string; questions: Question[] } | null>(null);
-  const [note, setNote] = useState("");
   const load = useCallback(async () => {
-    const [p, s, w, t] = await Promise.allSettled([call<{ problems: ProblemLite[] }>("/api/code/problems"), call<{ sources: SourceLite[] }>("/api/knowledge/sources"),
-      call<{ studied?: Studied[] }>("/api/schedule/week"), call<{ actions: TutorAction[] }>("/api/code/tutor")]);
+    const [p, s, w] = await Promise.allSettled([call<{ problems: ProblemLite[] }>("/api/code/problems"), call<{ sources: SourceLite[] }>("/api/knowledge/sources"),
+      call<{ studied?: Studied[] }>("/api/schedule/week")]);
     if (p.status === "fulfilled") setProblems(p.value.problems);
     if (s.status === "fulfilled") setSources(s.value.sources);
     if (w.status === "fulfilled") setStudied(w.value.studied ?? []);
-    setRedo(t.status === "fulfilled" ? (t.value.actions ?? []).filter((a) => a.redo) : []);
-    const lists = await Promise.all((["algo", "lab"] as const).map((o) => call<{ items: ItemLite[] }>(`/api/knowledge/review?limit=50&origin=${o}`).then((x) => x.items).catch(() => [] as ItemLite[])));
-    setDue({ theory: [], algo: lists[0], lab: lists[1] });
-    // 자료(11/13 사용자 "기억카드 통으로 보지 말라, 옛날 기억 계속 쓰잖아"): 기억 저장소 전체(예전 엔진 · 예전 실행) 대신
-    // 최근에 공부한 PDF의 지금 카드만, 기억 탭과 같은 분석(material-stats)으로 약한 카드 · 안 본 카드를 센다.
-    const seen = new Set<string>(); const gens: Array<{ gen: string; title: string }> = [];
-    for (const x of (w.status === "fulfilled" ? w.value.studied ?? [] : []).filter((x) => x.kind === "pdf")) { const g = /^(gen_[a-z0-9]+)/.exec(x.ref)?.[1]; if (g && !seen.has(g)) { seen.add(g); gens.push({ gen: g, title: x.title }); } }
-    const mats = await Promise.all(gens.slice(0, 3).map(async ({ gen, title }): Promise<MatWeak | null> => {
-      try {
-        const { map } = await call<{ map: { title?: string; sections: Array<{ cards: Array<{ ref: string; id: string }> }> } }>(`/api/study-map/${gen}`);
-        const refs = map.sections.flatMap((x) => x.cards.filter((c) => !/flow$/.test(c.id)).map((c) => c.ref));
-        const st = await call<{ cards: Record<string, { group: string }> }>("/api/knowledge/material-stats", { gen, refs });
-        const gs = Object.values(st.cards).map((c) => c.group);
-        return { gen, title: (map.title || title).replace(/\.pdf$/i, ""), weak: gs.filter((g) => g === "stuck" || g === "shaky").length, unseen: gs.filter((g) => g === "unseen").length };
-      } catch { return null; }
-    }));
-    setMat(mats.find((m) => m && m.weak) ?? mats.find((m) => m && m.unseen) ?? null);
   }, []);
-  const quiz = async (title: string, origin: Origin) => {
-    setNote("");
-    try { const { questions } = await call<{ questions: Question[] }>(`/api/knowledge/quiz?count=10&origin=${origin}`); if (questions.length) setRun({ title, questions }); else setNote("지금 다시 볼 것이 없어요."); }
-    catch { setNote("문제를 불러오지 못했어요."); }
-  };
   useEffect(() => later(() => void load()), [load]);
-
-  if (run) return <QuestionRun title={run.title} questions={run.questions} onClose={() => { setRun(null); void load(); }} />;
-
-  // 오늘 다시 볼 것: 갈래마다 한 줄(할 게 없는 갈래는 안 보임)
-  const rowsDue: Due[] = [];
-  if (mat) rowsDue.push({ key: "theory", label: "자료", count: mat.weak ? `약한 카드 ${mat.weak}장` : `아직 안 본 카드 ${mat.unseen}장`, why: mat.title,
-    go: () => { shelfSel.set(`gen:${mat.gen}`); go("knowledge"); }, weight: mat.weak ? 4 : 1 });
-  if (redo.length || due?.algo.length) {
-    const r = redo[0];
-    rowsDue.push(r ? { key: "algo", label: "알고리즘", count: `혼자 다시 풀 문제 ${redo.length}개`, why: `${r.number}번 · ${r.why}`, go: () => go("code"), weight: 3 }
-      : { key: "algo", label: "알고리즘", count: `알고리즘 기억 ${due!.algo.length}개`, why: due!.algo[0]?.title ?? "", go: () => void quiz("알고리즘 기억 다시 보기", "algo"), weight: 1 });
-  }
-  if (due?.lab.length) rowsDue.push({ key: "lab", label: "실습", count: `다시 확인 ${due.lab.length}개`, why: due.lab[0]?.title ?? "", go: () => void quiz("실습 다시 확인", "lab"), weight: 2 });
-  const first = [...rowsDue].sort((a, b) => b.weight - a.weight)[0];
 
   // 이어서 하기 (11/9 사용자 "자료/알고리즘/실습 세 가지 탭에서 각각 하나씩"): 갈래마다 가장 최근에 한 것 하나.
   const newest = (xs: Array<Last | null>) => xs.filter((x): x is Last => !!x).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
@@ -103,19 +52,6 @@ export default function TodayBoard() {
 
   return (
     <div className="td-two">
-      <section className="td-card">
-        <p className="eyebrow">오늘 다시 볼 것</p>
-        {!due ? <p className="small muted">불러오는 중…</p> : !rowsDue.length ? <p className="small muted">오늘 다시 볼 건 없어요. 이어서 하던 걸 해 보세요.</p> : <>
-          {first ? <button className="td-first" onClick={first.go}><small>오늘 이것부터</small><b>{first.label} · {first.count}</b><span className="small muted">{first.why}</span></button> : null}
-          <ul className="td-cont">
-            {rowsDue.map((r) => <li key={r.key}>
-              <span className="td-cont-k">{r.label}</span>
-              <button className="td-cont-b" onClick={r.go}><span className="td-cont-t">{r.count}</span><small className="muted">{r.why}</small></button>
-            </li>)}
-          </ul>
-        </>}
-        {note ? <p className="small muted">{note}</p> : null}
-      </section>
       <section className="td-card">
         <p className="eyebrow">이어서 하기</p>
         <ul className="td-cont">
