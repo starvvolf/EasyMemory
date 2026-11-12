@@ -152,15 +152,23 @@ test("코스 재시작은 이전 기록을 보존하고 상태·코드 폴더를
   } finally { await saveChatPrompts(CHAT_PROMPTS); }
 });
 
-test("파일 고치기 허락(11/12): 따로 안 정했으면 다이얼(ext.edit)을 따르고, 대화에서 '안 돼'로 막았으면 다이얼이 켜도 막는다", async () => {
+test("파일 고치기 허락(11/12): ext.edit가 다이얼과 대화의 허락으로 정한다(스스로는 안 고침, 빨리 만들기는 안 골랐으면 허락, 막았으면 막음)", async () => {
+  const { editRule } = await import("../lib/practice.ts");
+  assert.equal(editRule("self", "allow"), false);
+  assert.equal(editRule("together", undefined), false);
+  assert.equal(editRule("together", "allow"), true);
+  assert.equal(editRule("fast", undefined), true);
+  assert.equal(editRule("fast", "deny"), false);
   const seen: boolean[] = [];
   const run = async (io: { learningChat?: { edit?: boolean } }) => { seen.push(!!io.learningChat?.edit); return "답"; };
   const s = await newChat();
-  await askChat(s.id, "첫 질문", run as never);
-  await askChat(s.id, "빨리 만들기", run as never, { edit: async () => true });
+  await askChat(s.id, "다이얼 없음", run as never);
+  await askChat(s.id, "빨리 만들기", run as never, { edit: async (o) => editRule("fast", o) });
   await setChatOptions(s.id, { edit: "deny" });
-  await askChat(s.id, "막은 뒤", run as never, { edit: async () => true });
-  await setChatOptions(s.id, { edit: "allow" });
-  await askChat(s.id, "허락 뒤", run as never, { edit: async () => false });
-  assert.deepEqual(seen, [false, true, false, true]);
+  await askChat(s.id, "막은 뒤", run as never, { edit: async (o) => editRule("fast", o) });
+  await setChatOptions(s.id, { edit: "allow", effort: "medium" });
+  await askChat(s.id, "스스로", run as never, { edit: async (o) => editRule("self", o) });
+  assert.deepEqual(seen, [false, true, false, false]);
+  assert.equal((await chatOf(s.id)).effort, "medium");
+  await assert.rejects(setChatOptions(s.id, { effort: "max" }), /생각 강도/);
 });

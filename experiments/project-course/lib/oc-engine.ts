@@ -156,6 +156,7 @@ function policyPlugin(fake: boolean) {
             const freeSys = live.get(ev.sessionID)?.io.freeSystem;
             const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary, experiment ? experiment.system ?? CHAT_SYSTEM : freeSys ? freeSys : false);
             if (experiment?.model) j.model = experiment.model; // 대화마다 고른 모델(11/4)
+            if (experiment?.effort) j.reasoning = { ...(j.reasoning ?? {}), effort: experiment.effort }; // 대화마다 고른 생각 강도(11/12)
             const run = live.get(ev.sessionID)?.io.runId;
             if (run) {
               j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게

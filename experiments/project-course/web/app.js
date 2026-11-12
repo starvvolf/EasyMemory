@@ -5,6 +5,8 @@ const $ = (s, el = document) => el.querySelector(s);
 const EMBED = new URLSearchParams(location.search).has("embed");
 // 앱 안 편집기 화면의 오른쪽 튜터(11/11): 장기 · 지금 목표는 앱 위 띠에 있으니 여기서는 버튼만 남긴다
 const STUDIO = new URLSearchParams(location.search).has("studio");
+// 개발자 모드(11/12 사용자 "기록은 개발하는 사람용이니까 개발자 모드에서만"): 주소에 ?dev=1(끄기 ?dev=0), 이 브라우저에 기억
+const DEV = (() => { const q = new URLSearchParams(location.search).get("dev"); try { if (q === "1" || q === "0") localStorage.setItem("recaller.dev", q); return localStorage.getItem("recaller.dev") === "1"; } catch { return q === "1"; } })();
 if (EMBED) {
   const root = document.documentElement;
   const q = new URLSearchParams(location.search);
@@ -759,8 +761,8 @@ function drawFree() {
   const foot = h("footer", { class: "freefoot" },
     // 도움 다이얼(11/11 사용자 "다이얼 하나 + 기록은 정직하게"): 막혔을 때 튜터가 어디까지 해 주나. 누르면 바로 바뀌고(AI 안 부름) 다음 답부터
     lesson.chat && lesson.goals ? h("div", { class: "fdial", role: "group", "aria-label": "도움 정도" }, h("span", { class: "fdial-k" }, "도움"),
-      [["self", "스스로", "방향만 받아요. 코드는 내가 써요"], ["together", "같이", "틀은 받고 핵심은 내가 채워요"], ["fast", "빨리 만들기", "튜터가 바로 써 주고 설명해 줘요(받아 쓴 것으로 기록돼요)"]].map(([k, label, tip]) =>
-        h("button", { class: `fdial-b ${(lesson.goals.help ?? "together") === k ? "on" : ""}`, title: tip, "aria-pressed": String((lesson.goals.help ?? "together") === k),
+      [["self", "스스로", "방향만 받아요. 코드는 내가 써요(튜터는 파일을 안 고쳐요)"], ["together", "같이", "틀은 받고 핵심은 내가 채워요"], ["fast", "빨리 만들기", "튜터가 바로 써 주고 설명해 줘요(받아 쓴 것으로 기록돼요)"]].map(([k, label, tip]) =>
+        h("button", { class: `fdial-b ${(lesson.goals.help ?? "together") === k ? "on" : ""}`, "data-tip": tip, "aria-label": `${label}: ${tip}`, "aria-pressed": String((lesson.goals.help ?? "together") === k),
           onclick: (e) => { if ((lesson.goals.help ?? "together") !== k) send({ do: "goal", op: "help", help: k })(e); } }, label))) : null,
     // 11/11 사용자 "채팅창 위에 끝이 동글동글한 직사각형으로" · 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
     // 11/11 사용자: 목표가 정해지기 전에는 눌러도 할 일이 없어 숨긴다
@@ -778,14 +780,14 @@ function drawFree() {
     // 제목은 한 줄 전체를 쓰고, 길면 … (2026-11-06 사용자 "제목한테 가로줄 하나주고 길면 ..."). 전체 제목은 마우스를 올리면 보인다.
     h("div", { class: "fhtitle", title: lesson.chat ? (lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일" }, h("b", {}, STUDIO && lesson.chat ? "튜터" : lesson.chat ? (lesson.goals?.current?.title ?? lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
     lesson.chat ? modelPick(run, lesson) : null,
-    h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
-    h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),
-    lesson.chat ? h("button", { class: "btn small", title: "행동마다 상태가 어떻게 바뀌었는지 기록 보기", onclick: () => go_(`#/timeline/${run.id}`) }, "기록") : null,
+    // 11/12 사용자 "홈으로 가는 거는 하나로": 대화 목록 · 새 대화는 같은 곳(홈)
+    h("button", { class: "fib", title: "대화 목록 · 새 대화", "aria-label": "대화 목록 · 새 대화", onclick: () => go_("#/home") }, icon("home")),
+    lesson.chat && DEV ? h("button", { class: "btn small", title: "행동마다 상태가 어떻게 바뀌었는지 기록 보기", onclick: () => go_(`#/timeline/${run.id}`) }, "기록") : null,
     lesson.goals?.long ? h("button", { class: "btn small", title: "하던 목표를 정리하고(배운 것 · 부족했던 점 · 학습자 메모리) 앱 지식으로 넣은 뒤 끝내요", disabled: lesson.busy, onclick: () => endLearning(run) }, "학습 종료") : null,
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
-  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat?.engine === "codex" && lesson.chat.codexLogin === false ? h("div", { class: "editask" }, h("span", { class: "grow" }, "Codex 버전은 Recaller 전용 Codex 로그인이 한 번 필요해요(평소 Codex 앱 설정 · 기억과 섞이지 않게)."), h("button", { class: "btn small primary", onclick: (e) => busy(e.target, async () => { const r = await api("POST", "/api/codex-chat/login"); toast(r.already ? "이미 로그인돼 있어요." : "브라우저에서 ChatGPT로 로그인해 주세요. 끝나면 이 화면을 새로고침해요."); }) }, "Codex 로그인")) : null, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit ? editAsk(run) : null, foot));
+  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat?.engine === "codex" && lesson.chat.codexLogin === false ? h("div", { class: "editask" }, h("span", { class: "grow" }, "Codex 버전은 Recaller 전용 Codex 로그인이 한 번 필요해요(평소 Codex 앱 설정 · 기억과 섞이지 않게)."), h("button", { class: "btn small primary", onclick: (e) => busy(e.target, async () => { const r = await api("POST", "/api/codex-chat/login"); toast(r.already ? "이미 로그인돼 있어요." : "브라우저에서 ChatGPT로 로그인해 주세요. 끝나면 이 화면을 새로고침해요."); }) }, "Codex 로그인")) : null, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit && lesson.goals && (lesson.goals.help ?? "together") !== "self" ? editAsk(run, lesson.goals.help ?? "together") : null, foot));
   list.scrollTop = list.scrollHeight;
   if (!FLOAT && !freeUi.focus) window.scrollTo({ top: document.body.scrollHeight });
   if (freeUi.focus) { input.focus({ preventScroll: true }); try { input.setSelectionRange(...freeUi.sel); } catch {} }
@@ -831,7 +833,6 @@ function goalBar(lesson, send) {
     `${goalUi.showLong ? "▾" : "▸"} 장기 목표 · ${S ? "원래 로드맵(잠시 보관)" : "로드맵"} (${prog})`);
   return h("div", { class: "gbar" }, fold,
     goalUi.showLong ? h("div", { class: "glong" }, h("span", { class: "gk" }, "장기"), h("b", { title: g.long.spec || "" }, g.long.text),
-      h("button", { class: "gmode", disabled: lesson.busy, title: "진행 방식 바꾸기", onclick: op("mode", { mode: g.mode === "topdown" ? "bottomup" : "topdown" }) }, g.mode === "topdown" ? "탑다운" : "바텀업"),
       h("span", { class: "mut small" }, prog)) : null,
     goalUi.showLong && g.map.length ? h("div", { class: `gmap ${S ? "kept" : ""}` }, g.map.map((m, i) => h("span", { class: `gstep ${m.status}` }, `${i + 1}${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}`))) : null,
     // 보충 로드맵(11/7 사용자 "원래 로드맵은 보관해 숨기고, 맨 마지막 종착지를 A로 놓고 보충 시작"): 보충 단계들 → 🎯 막힌 단계
@@ -964,14 +965,20 @@ function recordsBar(lesson) {
 
 /* 대화 설정(11/4 사용자): 모델 고르기 · 파일 고치기 허락(처음에 묻고, 작업 폴더 줄에서 바꿈) */
 const chatOpt = (run, body) => busy(null, async () => { try { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/chat-options`, body); drawLesson(); } catch (e) { toast(e.message); } });
+// 11/12 사용자 "모델 고르기는 학습자가 할 수 있어야 되고 6.1인지도 적어 주고, 추론 레벨도 정할 수 있게"
 function modelPick(run, lesson) {
   const sel = h("select", { class: "mpick", title: "이 대화의 모델(다음 질문부터)", "aria-label": "모델", disabled: lesson.busy, onchange: (e) => chatOpt(run, { model: e.target.value }) },
     lesson.chat.models.map((m) => h("option", { value: m.id }, m.label)));
   sel.value = lesson.chat.model;
-  return sel;
+  if (!lesson.chat.efforts) return sel;
+  const eff = h("select", { class: "mpick", title: "생각 강도: 높을수록 답 전에 더 생각해요(그만큼 느려져요). 다음 질문부터", "aria-label": "생각 강도", disabled: lesson.busy, onchange: (e) => chatOpt(run, { effort: e.target.value }) },
+    lesson.chat.efforts.map((m) => h("option", { value: m.id }, m.label)));
+  eff.value = lesson.chat.effort ?? "low";
+  return h("span", { class: "mpicks" }, sel, eff);
 }
-function editAsk(run) {
-  return h("div", { class: "editask" }, h("span", { class: "grow" }, "튜터가 작업 폴더의 파일을 직접 만들고 고쳐도 될까요? 나중에 작업 폴더 줄에서 바꿀 수 있어요."),
+// 11/12 사용자 "같이나 빨리 만들기 하면 허용이 나오게": 스스로는 학습자가 코드를 쓰므로 안 묻는다
+function editAsk(run, help) {
+  return h("div", { class: "editask" }, h("span", { class: "grow" }, `튜터가 작업 폴더의 파일을 직접 만들고 고쳐도 될까요?${help === "fast" ? " (고르기 전에는 고쳐도 되는 걸로 봐요)" : ""} 나중에 작업 폴더 줄에서 바꿀 수 있어요.`),
     h("button", { class: "btn small primary", onclick: () => chatOpt(run, { edit: "allow" }) }, "허용"),
     h("button", { class: "btn small", onclick: () => chatOpt(run, { edit: "deny" }) }, "허용 안 함"));
 }
@@ -996,5 +1003,5 @@ function wsBar(run, lesson) {
     // 앱 안 편집기(11/11): 왼쪽 편집기 · 오른쪽 튜터 한 화면. 그 화면 안(?embed)에서는 안 보인다
     EMBED ? null : h("a", { class: "btn small", href: `/studio.html?run=${run.id}`, title: "VS Code와 같은 편집기를 이 화면 왼쪽에 띄우고 튜터는 오른쪽에(내 VS Code 설정과는 따로)" }, "앱 안에서 편집"),
     h("label", { class: "small edittog", title: "VS Code에서 저장(Ctrl+S)하면 튜터가 그 파일을 확인해요" }, h("input", { type: "checkbox", checked: lesson.autoCheck !== false, onchange: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/auto-check`, { on: e.target.checked }); toast(e.target.checked ? "저장하면 튜터가 확인해요." : "저장해도 튜터가 확인하지 않아요."); }) }), " 저장하면 확인"),
-    lesson.chat.edit ? h("label", { class: "small edittog", title: "튜터가 이 폴더의 파일을 고칠 수 있는지" }, h("input", { type: "checkbox", checked: lesson.chat.edit === "allow", disabled: lesson.busy, onchange: (e) => chatOpt(run, { edit: e.target.checked ? "allow" : "deny" }) }), " 튜터가 고치기") : null);
+    lesson.chat.edit && (lesson.goals?.help ?? "together") !== "self" ? h("label", { class: "small edittog", title: "튜터가 이 폴더의 파일을 고칠 수 있는지" }, h("input", { type: "checkbox", checked: lesson.chat.edit === "allow", disabled: lesson.busy, onchange: (e) => chatOpt(run, { edit: e.target.checked ? "allow" : "deny" }) }), " 튜터가 고치기") : null);
 }

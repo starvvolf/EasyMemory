@@ -40,7 +40,7 @@ async function chatPart(chatId: string) {
   const lr = await (await import("./chat-learned.ts")).learnedOf(chatId);
   const learned = lr.items.map((x) => ({ concept: x.concept, kind: x.kind, meaning: x.meaning, quote: x.quote, messageId: x.messageId }));
   return { messages, busy: v.busy, workspace: v.workspace, learned, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length, noCourse: v.noCourse,
-    model: v.model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, edit: v.edit ?? null } };
+    model: v.model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, effort: v.effort ?? "low", efforts: ac.CHAT_EFFORTS, edit: v.edit ?? null } };
 }
 /* 11/4 사용자 "기존 UI에 붙여 봐(Codex 버전)": Codex 엔진 대화를 제품 화면 모양으로 옮긴다 */
 /** 예전에 만든 대화 폴더에도 VS Code 연결 표시를 둔다(한 번만, 11/5) */
@@ -350,6 +350,11 @@ export function freshSelection(runId: string, state = bridgeState(runId)) {
   sentSelection.set(runId, key);
   return `[VS Code에서 고른 코드 ${state?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n`;
 }
+/** 파일 고치기 규칙(11/12 사용자 "같이나 빨리 만들기 하면 허용이 나오게"): 스스로는 코드를 학습자가 쓰므로 안 고친다 */
+export function editRule(help: string | null | undefined, chatEdit: "allow" | "deny" | null | undefined) {
+  if (help === "self") return false;
+  return chatEdit === "allow" || (chatEdit !== "deny" && help === "fast");
+}
 /** 매 차례 맥락: 학습 목표 + 지난번 뒤 바뀐 코드(lib/changes.ts, 바뀐 게 없으면 안 붙음) */
 async function turnContext(runId: string, skip?: string) {
   const g = await (await import("./goals.ts")).goalContext(runId);
@@ -360,11 +365,11 @@ async function chatAsk(runId: string, chatId: string, text: string, skip?: strin
   const ac = await import("./agent-chat.ts");
   const G = await import("./goals.ts");
   // 학습 목표(11/4): 매 차례 맥락 + 목표 도구. 실험판의 목표 · 초점 도구(adjust_learning · get_learning_state)는 숨겨 두 체계가 섞이지 않게
-  // 파일 고치기 허락: 대화에서 정했으면 그대로, 아니면 다이얼이 빨리 만들기일 때(agent-chat askChat과 같은 규칙)
-  const editAllowed = async () => { const o = (await ac.chatOf(chatId)).edit; return o === "allow" || (o !== "deny" && (await G.goalsOf(runId)).help === "fast"); };
+  // 파일 고치기(11/12 사용자): 스스로면 안 고침, 같이 · 빨리 만들기면 화면에서 허락을 묻고 그대로, 아직 안 골랐으면 빨리 만들기만 허락으로 본다
+  const editAllowed = async () => editRule((await G.goalsOf(runId)).help, (await ac.chatOf(chatId)).edit);
   const ext = { context: () => turnContext(runId, skip), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: async (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner, { edit: await editAllowed() }), onTool: () => notifyLesson(runId),
-    // 11/12 실습 시뮬: "빨리 만들기"를 골랐는데 파일 고치기 도구가 숨겨져 튜터가 셸로 파일을 쓰다 잘림 → 다이얼이 빨리면 허락으로 본다(대화에서 "안 돼"로 막았으면 그대로)
-    edit: async () => (await G.goalsOf(runId)).help === "fast" };
+    // 11/12 실습 시뮬: "빨리 만들기"를 골랐는데 파일 고치기 도구가 숨겨져 튜터가 셸로 파일을 쓰다 잘림 → 다이얼과 허락으로 정한다(editRule)
+    edit: async (chatEdit: "allow" | "deny" | undefined) => editRule((await G.goalsOf(runId)).help, chatEdit) };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {
     clearInterval(chatPolls.get(runId)); chatPolls.delete(runId);
     await (await import("./timeline.ts")).endStep(runId); notifyLesson(runId);

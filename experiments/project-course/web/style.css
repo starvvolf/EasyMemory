@@ -976,6 +976,12 @@ body:has(.tlpage), .embed body:has(.tlpage) { --tl-page: color-mix(in srgb, #000
 .fdial-b:hover { background: color-mix(in srgb, var(--f-ink, var(--ink)) 8%, transparent); }
 .fdial-b.on { background: var(--f-s1, var(--panel)); color: var(--f-ink, var(--ink)); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .fdial-b.busy { color: transparent; }
+/* 다이얼 설명(11/12 사용자 "마우스 올리면 설명 살짝"): 브라우저 기본 title은 늦게 떠서 바로 뜨는 말풍선 */
+.fdial-b { position: relative; }
+.fdial-b[data-tip]:hover::after, .fdial-b[data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 240px; white-space: normal; text-align: left; padding: 6px 9px; border-radius: 8px; background: var(--f-ink, var(--ink)); color: var(--f-s1, var(--panel)); font-size: 11.5px; font-weight: 400; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,.18); pointer-events: none; z-index: 30; animation: tipIn .12s ease-out; }
+.fdial-b[data-tip]:first-of-type:hover::after { left: 0; transform: none; }
+@keyframes tipIn { from { opacity: 0; transform: translate(-50%, 3px); } }
+.mpicks { display: inline-flex; gap: 4px; }
 /* 막힌 순간(11/11): 학습 기록 위에 한 장면씩 */
 .tlpage .msec { margin: 6px 0 18px; }
 .tlpage .msec-h { display: flex; align-items: baseline; gap: 8px; margin: 10px 2px 8px; font-size: 14px; }
