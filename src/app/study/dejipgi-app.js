@@ -1101,6 +1101,8 @@ function leaveSession(){
   const map = S.session && S.session.fromMap;
   S.session = null;
   if (map){ setView(NAV.from || "practice"); const d = S.decks[map]; if (d) MaterialMapView.open(d); return; }
+  // 공부 탭으로 돌아올 때 사이드바가 알고리즘 · 실습 목록에 머물러 있지 않게(PDF 문제였으니 자료로)
+  if (!back || back === "practice"){ try{ localStorage.setItem("recaller:lib-branch", "material"); window.dispatchEvent(new CustomEvent("recaller:branch", { detail:"material" })); }catch(e){} }
   if (back && back !== "practice" && back !== S.view) setView(back); else render();
 }
 function fmtWhen(t){

@@ -84,7 +84,7 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
     if (!open) return;
     const on = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (e.key !== "Escape" || e.defaultPrevented || document.querySelector(".mm2-overlay")) return;
+      if (e.key !== "Escape" || e.defaultPrevented) return; // 공부 칸 지도 안에서 연 것은 앱이 먼저 닫고 defaultPrevented로 알린다
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA") && (t as HTMLInputElement).value) return;
       onClose();
     };
