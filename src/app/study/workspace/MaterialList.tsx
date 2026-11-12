@@ -62,7 +62,9 @@ export default function MaterialList({ ui, api }: { ui: Bridge; api: Api }) {
     // 예전 방식으로 만든 문제 묶음(자료 지도 없음)은 맨 아래
     const old: Entry[] = decks.filter((d) => !d.map).map((d) => ({ key: `deck:${d.id}`, branch: "material", icon: "🗂", title: d.title, sub: `문제 ${d.items}`, lastAt: "", itemIds: [],
       row: { key: `deck:${d.id}`, group: "material", kind: "deck", title: d.title, items: d.items, itemIds: [], lastAt: "", keys: [], folderId: null } }));
-    return [...making, ...shelf, ...old];
+    // 11/13 사용자 "옛날 문제 나오면 안 된다": 예전 문제 묶음은 목록에서 뺀다(데이터는 그대로, 아래 줄을 되살리면 다시 보임)
+    void old;
+    return [...making, ...shelf];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, reloadKey]);
   const list = entries.filter((e) => !q.trim() || e.title.toLowerCase().includes(q.trim().toLowerCase()));
