@@ -44,6 +44,7 @@ export default function ReviewLab() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [output, setOutput] = useState<"json" | "text">(() => (store.get("rlab-output") as "json" | "text") || "json");
   const [textFormat, setTextFormat] = useState("");
+  const [tab, setTab] = useState<"lab" | "history">(() => (store.get("rlab-tab") === "history" ? "history" : "lab"));
 
   useEffect(() => {
     void api<{ problems: Problem[]; system: string; models: string[]; efforts: string[]; presets: Preset[] }>("").then((d) => {
@@ -82,10 +83,13 @@ export default function ReviewLab() {
   return <div className="rlab">
     <header className="rlab-top">
       <div><h1>총정리 실험실</h1><p>대화 범위를 작게 잘라, 지시문·모델·강도를 바꿔 가며 총정리가 어떻게 나오는지 봐요. 돌릴 때마다 AI 1번. 풀이 노트의 실제 총정리는 바뀌지 않아요.</p></div>
+      <div className="rlab-quick"><button className={tab === "lab" ? "on" : ""} onClick={() => { setTab("lab"); store.set("rlab-tab", "lab"); }}>실험</button>
+        <button className={tab === "history" ? "on" : ""} onClick={() => { setTab("history"); store.set("rlab-tab", "history"); }}>지난 기록 전부(개발자용)</button></div>
       <label className="rlab-field">풀이<select value={pid} onChange={(e) => { setPid(e.target.value); setUserText(null); setPick([]); }}>{problems.map((p) => <option key={p.id} value={p.id}>{p.title} · 주고받은 것 {p.talks}개</option>)}</select></label>
     </header>
     {error ? <p className="rlab-err">{error}</p> : null}
-    <div className="rlab-body">
+    {tab === "history" ? <History product={product} titles={Object.fromEntries(problems.map((p) => [p.id, p.title]))} /> : null}
+    <div className="rlab-body" hidden={tab !== "lab"}>
       <aside className="rlab-side">
         <section className="rlab-box">
           <div className="rlab-boxhead"><b>범위</b><span>{whole ? `전체 ${talks.length}개` : `${lo + 1}~${hi + 1}번 (${hi - lo + 1}개)`}</span></div>
@@ -222,4 +226,100 @@ function Md({ text }: { text: string }) {
 function Inline({ text }: { text: string }) {
   return <>{text.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((x, i) => x.startsWith("**") && x.endsWith("**") && x.length > 4 ? <b key={i} className="md-b">{x.slice(2, -2)}</b>
     : x.startsWith("`") && x.endsWith("`") && x.length > 2 ? <code key={i}>{x.slice(1, -1)}</code> : <span key={i}>{x}</span>)}</>;
+}
+
+/* ---------- 지난 기록 전부(개발자용, 11/12 사용자 "우리 테스트 존나 했잖아, 지시문 바꿔 가면서… 그것도 다 볼 수 있게") ----------
+ * 호출 기록(/api/lab/ai/calls)에 남은 총정리 호출(제품 code:review-sheet + 실험실 code:review-lab)을 모두. 지시문이 같은 것끼리 "판"으로 묶고,
+ * 앞 판과 달라진 줄을 보여 준다. 출력은 JSON이면 칸별로, 글이면 머리글 카드로. */
+type CallRow = { id: string; at: string; purpose: string; model: string; effort?: string; ms?: number; ok: boolean; error?: string; tokens?: { in?: number; cached?: number; out?: number }; cost?: number | null; trace?: { ref?: string } };
+type CallFull = CallRow & { system: string; user: string; reply: string };
+function History({ product, titles }: { product: string; titles: Record<string, string> }) {
+  const [rows, setRows] = useState<CallFull[] | null>(null);
+  const [err, setErr] = useState("");
+  const [only, setOnly] = useState<"all" | "product" | "lab">("all");
+  const [pidF, setPidF] = useState("");
+  useEffect(() => {
+    void (async () => {
+      try {
+        const j = await fetch("/api/lab/ai/calls?limit=3000&since=2026-11-01T00:00:00.000Z", { cache: "no-store" }).then((r) => r.json()) as { calls: CallRow[] };
+        const list = j.calls.filter((c) => c.purpose === "code:review-sheet" || c.purpose === "code:review-lab");
+        const full: CallFull[] = [];
+        for (let i = 0; i < list.length; i += 6) {
+          const part = await Promise.all(list.slice(i, i + 6).map((c) => fetch(`/api/lab/ai/calls/${c.id}`, { cache: "no-store" }).then((r) => r.json()).then((d: { call: CallFull }) => ({ ...c, ...d.call })).catch(() => ({ ...c, system: "", user: "", reply: "" }))));
+          full.push(...part);
+        }
+        setRows(full);
+      } catch (e) { setErr((e as Error).message); }
+    })();
+  }, []);
+  // 지시문 판: 처음 나온 순서대로 번호(오래된 것이 1).
+  const versions = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of [...(rows ?? [])].sort((a, b) => a.at.localeCompare(b.at))) if (r.system && !m.has(r.system)) m.set(r.system, m.size + 1);
+    return m;
+  }, [rows]);
+  const prevSystem = useMemo(() => { const arr = [...versions.keys()]; return (sys: string) => arr[(versions.get(sys) ?? 1) - 2] ?? ""; }, [versions]);
+  if (err) return <p className="rlab-err">{err}</p>;
+  if (!rows) return <p className="rlab-empty">호출 기록을 모으는 중이에요…</p>;
+  const shown = rows.filter((r) => (only === "all" || (only === "product") === (r.purpose === "code:review-sheet")) && (!pidF || r.trace?.ref === pidF));
+  const pids = [...new Set(rows.map((r) => r.trace?.ref).filter(Boolean) as string[])];
+  const totalCost = shown.reduce((a, r) => a + (r.cost ?? 0), 0);
+  return <section className="rlab-hist">
+    <div className="rlab-boxhead">
+      <b>총정리 호출 {shown.length}번</b><span>지시문 판 {versions.size}개 · 합계 ${totalCost.toFixed(3)}</span>
+      <div className="rlab-quick">{(["all", "product", "lab"] as const).map((x) => <button key={x} className={only === x ? "on" : ""} onClick={() => setOnly(x)}>{x === "all" ? "전부" : x === "product" ? "제품(풀이 노트)" : "실험실"}</button>)}</div>
+      <select value={pidF} onChange={(e) => setPidF(e.target.value)}><option value="">모든 풀이</option>{pids.map((p) => <option key={p} value={p}>{titles[p] ?? p}</option>)}</select>
+    </div>
+    <div className="rlab-list">{shown.map((r) => <HistCard key={r.id} r={r} ver={versions.get(r.system) ?? 0} prev={prevSystem(r.system)} isProduct={r.system.trim().startsWith(product.trim().slice(0, 200)) && !!product} title={titles[r.trace?.ref ?? ""] ?? r.trace?.ref ?? ""} />)}</div>
+  </section>;
+}
+function HistCard({ r, ver, prev, title }: { r: CallFull; ver: number; prev: string; isProduct: boolean; title: string }) {
+  const [open, setOpen] = useState(false);
+  const [sys, setSys] = useState<"" | "diff" | "all">("");
+  const [user, setUser] = useState(false);
+  const reply = r.reply ?? "";
+  const json = reply.trim().startsWith("{");
+  let parsed: unknown = null;
+  if (json) { try { parsed = JSON.parse(reply); } catch { parsed = null; } }
+  const topics = !json ? (reply.match(/^##\s/gm) ?? []).length : 0;
+  return <article className="rlab-run-card">
+    <header>
+      <div className="meta">
+        <span className="chip m">판 {ver}</span>
+        <span className="chip">{r.purpose === "code:review-sheet" ? "제품" : "실험실"}</span>
+        <span className="chip">{title}</span>
+        <span className="chip">{r.model.replace("gpt-", "")}{r.effort ? ` · ${r.effort}` : ""}</span>
+        <span className="chip">{r.ms ? `${Math.round(r.ms / 1000)}초` : "—"}</span>
+        <span className="chip">입력 {k(r.tokens?.in)} · 출력 {k(r.tokens?.out)}</span>
+        <span className="chip">{r.cost == null ? "$—" : `$${r.cost.toFixed(4)}`}</span>
+        <span className="chip d">{json ? "JSON" : `글${topics ? ` · 주제 ${topics}` : ""}`}</span>
+        {!r.ok ? <span className="chip w">실패: {r.error}</span> : null}
+      </div>
+      <div className="acts">
+        <span className="when">{new Date(r.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+        <button className="link" onClick={() => setOpen((x) => !x)}>{open ? "결과 접기" : "결과 보기"}</button>
+        <button className="link" onClick={() => setSys((x) => (x === "diff" ? "" : "diff"))}>{prev ? "앞 판과 달라진 줄" : "지시문(첫 판)"}</button>
+        <button className="link" onClick={() => setSys((x) => (x === "all" ? "" : "all"))}>지시문 전체</button>
+        <button className="link" onClick={() => setUser((x) => !x)}>보낸 기록</button>
+      </div>
+    </header>
+    {sys === "diff" ? <Diff a={prev} b={r.system} /> : sys === "all" ? <pre className="raw">{r.system}</pre> : null}
+    {user ? <pre className="raw">{r.user}</pre> : null}
+    {open ? (json ? (parsed ? <div className="jv"><JsonView v={parsed} /></div> : <pre className="raw">{reply}</pre>) : <Md text={reply} />) : null}
+  </article>;
+}
+/** 줄 단위 차이: 앞 판에 없던 줄은 +, 사라진 줄은 −. (순서는 새 판 기준) */
+function Diff({ a, b }: { a: string; b: string }) {
+  if (!a) return <pre className="raw">{b}</pre>;
+  const A = new Set(a.split("\n").map((x) => x.trim()).filter(Boolean)), B = new Set(b.split("\n").map((x) => x.trim()).filter(Boolean));
+  const added = b.split("\n").filter((x) => x.trim() && !A.has(x.trim()));
+  const removed = a.split("\n").filter((x) => x.trim() && !B.has(x.trim()));
+  return <div className="diff">{added.map((x, i) => <div key={`a${i}`} className="add">+ {x}</div>)}{removed.map((x, i) => <div key={`r${i}`} className="del">− {x}</div>)}{!added.length && !removed.length ? <div className="muted">달라진 줄 없음(같은 지시문)</div> : null}</div>;
+}
+/** JSON 결과를 칸별로(예전 판들은 모양이 제각각이라 이름 그대로 보여 준다). */
+function JsonView({ v, name }: { v: unknown; name?: string }) {
+  if (typeof v === "string") return <div className="jv-s">{name ? <b className="jv-k">{name}</b> : null}<Rich text={v} /></div>;
+  if (typeof v === "number" || typeof v === "boolean" || v == null) return <div className="jv-s">{name ? <b className="jv-k">{name}</b> : null}<code>{String(v)}</code></div>;
+  if (Array.isArray(v)) return <div className="jv-a">{name ? <b className="jv-k">{name} ({v.length})</b> : null}<ol>{v.map((x, i) => <li key={i}><JsonView v={x} /></li>)}</ol></div>;
+  return <div className="jv-o">{name ? <b className="jv-k">{name}</b> : null}{Object.entries(v as Record<string, unknown>).map(([key, x]) => <JsonView key={key} v={x} name={key} />)}</div>;
 }

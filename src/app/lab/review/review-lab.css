@@ -85,3 +85,16 @@
 .rlab .md-h2.big .sz{background:var(--big)}
 .rlab .md-h2.small .sz{background:var(--small)}
 .rlab .md-b{color:var(--accent)}
+
+/* 지난 기록 전부(개발자용) */
+.rlab-hist{display:flex;flex-direction:column;gap:12px}
+.rlab-hist select{max-width:260px}
+.rlab .diff{font-family:"JetBrains Mono",monospace;font-size:11.5px;white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:420px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.rlab .diff .add{color:#2f8a5b;background:color-mix(in srgb,#3fbf86 10%,transparent)}
+.rlab .diff .del{color:var(--err);background:color-mix(in srgb,#c2432f 8%,transparent)}
+.rlab .jv{display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.rlab .jv-o{display:flex;flex-direction:column;gap:6px;border-left:2px solid var(--line);padding-left:10px}
+.rlab .jv-a ol{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rlab .jv-k{display:block;font-size:11.5px;color:var(--accent);font-family:"JetBrains Mono",monospace;margin-bottom:2px}
+.rlab .jv-s p{margin:0;line-height:1.7}
+.rlab .jv-s pre{margin:4px 0;background:var(--code);color:var(--code-ink);border-radius:8px;padding:8px 10px;font-size:12px;overflow-x:auto}
