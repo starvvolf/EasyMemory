@@ -25,7 +25,8 @@ export default function ProjectStudy() {
   // 11/13 [경계] A: 방금 만든 실습(공부 › 실습의 [+ 새 실습])은 목록에 아직 없을 수 있어 한 번 새로 읽고 다시 찾는다
   const reloaded = useRef<string | null>(null);
   useEffect(() => later(() => {
-    if (!wantRun || !status) return;
+    // 실습 서버가 켜지는 중이면(앱을 막 켰을 때) 기다렸다가 연다 — 11/13 노트북: 켜지는 사이에 눌러 옛 목록에 멈춤
+    if (!wantRun || !status || !status.online) return;
     const r = status.runs.find((x) => x.id === wantRun);
     if (r) { setStudioRun(r); setWantRun(null); return; }
     if (reloaded.current !== wantRun) { reloaded.current = wantRun; void call<Status>("/api/project-course/status").then(setStatus).catch(() => setWantRun(null)); return; }
