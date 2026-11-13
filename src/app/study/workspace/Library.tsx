@@ -558,8 +558,11 @@ function Chat({ pageRef, focusIds, where }: { pageRef: React.RefObject<HTMLDivEl
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // 11/13 사용자 "채팅창 접기 가능하면 좋겠어": 접으면 한 줄 막대만 남긴다(접은 상태는 이 PC에 기억)
+  const [folded, setFolded] = useState(() => { try { return localStorage.getItem("recaller:lib-chat-folded") === "1"; } catch { return false; } });
+  const fold = (v: boolean) => { setFolded(v); try { localStorage.setItem("recaller:lib-chat-folded", v ? "1" : "0"); } catch { /* 저장 못 해도 화면만 */ } };
   const log = useRef<HTMLDivElement>(null);
-  useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [msgs, busy]);
+  useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [msgs, busy, folded]);
   const send = async () => {
     const question = text.trim(); if (!question || busy) return;
     setText(""); setMsgs((m) => [...m, { role: "me", text: question }]); setBusy(true);
@@ -571,8 +574,14 @@ function Chat({ pageRef, focusIds, where }: { pageRef: React.RefObject<HTMLDivEl
     } catch (e) { setMsgs((m) => [...m, { role: "ai", text: `못 물어봤어요: ${errorText(e)}` }]); }
     finally { setBusy(false); }
   };
+  if (folded) return (
+    <div className="lib-chat folded">
+      <button className="lib-chat-bar" onClick={() => fold(false)} title="채팅창 펼치기">💬 내 기억에 묻기{msgs.length ? ` · 대화 ${msgs.filter((m) => m.role === "me").length}개` : ""}{busy ? " · 답하는 중…" : ""} <span aria-hidden="true">▴</span></button>
+    </div>
+  );
   return (
     <div className={`lib-chat${msgs.length || busy ? " has" : ""}`}>
+      <button className="lib-chat-fold" onClick={() => fold(true)} title="채팅창 접기" aria-label="채팅창 접기">▾ 접기</button>
       {msgs.length || busy ? <div className="lib-log" ref={log}>{msgs.map((m, i) => <div key={i} className={`lib-msg ${m.role}`}>{m.role === "ai" ? <Inline text={m.text} /> : m.text}</div>)}
         {busy ? <div className="lib-msg ai wait"><span className="lib-dots"><i /><i /><i /></span></div> : null}</div> : null}
       <form className="lib-in" onSubmit={(e) => { e.preventDefault(); void send(); }}>

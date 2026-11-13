@@ -591,3 +591,10 @@
 .dejipgi .st-opt span.num{color:var(--muted);font-size:12.5px}
 .dejipgi .st-opt:hover:not(:disabled){border-color:var(--accent)}
 .dejipgi .st-opt:disabled{opacity:.45;cursor:default}
+/* 11/13 기억 채팅창 접기 */
+.dejipgi .lib-chat{position:relative}
+.dejipgi .lib-chat-fold{position:absolute;top:6px;right:12px;border:0;background:none;color:var(--muted);font-size:12px;cursor:pointer;padding:2px 6px;border-radius:6px}
+.dejipgi .lib-chat-fold:hover{color:var(--ink);background:var(--surface-2,rgba(128,128,128,.12))}
+.dejipgi .lib-chat.folded{padding:6px 14px}
+.dejipgi .lib-chat-bar{border:0;background:none;color:var(--muted);font-size:13px;cursor:pointer;text-align:left;padding:4px 0}
+.dejipgi .lib-chat-bar:hover{color:var(--ink)}
