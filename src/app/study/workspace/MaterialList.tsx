@@ -242,12 +242,20 @@ function CodeLanding() {
 function ProjectLanding() {
   const runs = useOther<RunLite>("/api/project-course/library", runsOf);
   const going = runs?.find((r) => !r.ended);
+  // 11/13 사용자 "실습 화면 열기 → 새 실습으로 바꿔": 옛 실습 목록 화면을 거치지 않고 빈 실습을 만들어 바로 편집기 · 튜터로
+  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const startNew = async () => {
+    setBusy(true); setErr("");
+    try { const out = await call<{ runId: string }>("/api/project-course/free", {}); enterProject(out.runId); }
+    catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
+  };
   return <>
     <Head icon="🛠" title="실습" sub="왼쪽에서 실습을 누르면 그 실습 화면으로 바로 들어가요." />
     <div className="row sf-acts">
-      <button className="btn primary" onClick={() => enterProject()}>실습 화면 열기 →</button>
+      <button className="btn primary" disabled={busy} onClick={() => void startNew()} title="빈 실습을 만들고 편집기 · 튜터로 바로 들어가요. 튜터가 무엇을 만들지부터 물어요">{busy ? "만드는 중…" : "+ 새 실습"}</button>
       {going ? <button className="btn" onClick={() => enterProject(going.id)}>이어 하기: {going.title.slice(0, 30)}</button> : null}
     </div>
+    {err ? <p className="small" style={{ color: "var(--bad, #c33)" }}>{err}</p> : null}
   </>;
 }
 

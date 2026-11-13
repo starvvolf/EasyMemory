@@ -22,7 +22,15 @@ export default function ProjectStudy() {
   // [경계] A 11/12: 공부 › 실습 목록에서 누른 실습은 이 화면이 열리자마자 그 실습의 편집기 · 튜터로(사용자 "실습은 실습으로 자연스럽게 연결")
   const [wantRun, setWantRun] = useState<string | null>(() => { const id = projectOpen.id; projectOpen.id = null; return id; });
   useEffect(() => { const on = (e: Event) => { projectOpen.id = null; setWantRun((e as CustomEvent<string>).detail); }; window.addEventListener("recaller:project-open", on); return () => window.removeEventListener("recaller:project-open", on); }, []);
-  useEffect(() => later(() => { if (!wantRun || !status) return; const r = status.runs.find((x) => x.id === wantRun); if (r) setStudioRun(r); setWantRun(null); }), [wantRun, status]);
+  // 11/13 [경계] A: 방금 만든 실습(공부 › 실습의 [+ 새 실습])은 목록에 아직 없을 수 있어 한 번 새로 읽고 다시 찾는다
+  const reloaded = useRef<string | null>(null);
+  useEffect(() => later(() => {
+    if (!wantRun || !status) return;
+    const r = status.runs.find((x) => x.id === wantRun);
+    if (r) { setStudioRun(r); setWantRun(null); return; }
+    if (reloaded.current !== wantRun) { reloaded.current = wantRun; void call<Status>("/api/project-course/status").then(setStatus).catch(() => setWantRun(null)); return; }
+    setWantRun(null);
+  }), [wantRun, status]);
 
   const load = useCallback(async () => {
     try { setStatus(await call<Status>("/api/project-course/status")); } catch (e) { setMsg(errorText(e)); }

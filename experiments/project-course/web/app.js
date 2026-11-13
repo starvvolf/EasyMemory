@@ -484,6 +484,19 @@ function rich(text, ws) {
       box.append(codeBlock(body.join("\n"), fence[1] || "", fence[2] || "", ws));
       continue;
     }
+    // 표(11/13 사용자 "튜터가 표 쓰면 표로 안 뜬다"): | 머리 | … 다음 줄이 |---|---| 이면 표로
+    if (/^\s*\|.*\|\s*$/.test(line) && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1] || "")) {
+      flush(); list = null;
+      const cells = (l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+      const aligns = cells(lines[i + 1]).map((c) => (/^:-+:$/.test(c) ? "center" : /-:$/.test(c) ? "right" : ""));
+      const td = (tag, c, k) => h(tag, aligns[k] ? { style: `text-align:${aligns[k]}` } : {}, inline(c, ws));
+      const head = h("tr", {}, ...cells(line).map((c, k) => td("th", c, k)));
+      const body = [];
+      for (i += 2; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) body.push(h("tr", {}, ...cells(lines[i]).map((c, k) => td("td", c, k))));
+      i--;
+      box.append(h("div", { class: "rtable" }, h("table", {}, h("thead", {}, head), h("tbody", {}, ...body))));
+      continue;
+    }
     const hd = /^\s*(#{1,4})\s+(.*)$/.exec(line);
     if (hd) { flush(); list = null; box.append(h(hd[1].length <= 2 ? "h3" : "h4", { class: "rh" }, inline(hd[2].replace(/\*\*/g, ""), ws))); continue; }
     const q = /^\s*>\s?(.*)$/.exec(line);

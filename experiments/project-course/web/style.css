@@ -1011,3 +1011,8 @@ body:has(.tlpage), .embed body:has(.tlpage) { --tl-page: color-mix(in srgb, #000
 .fquick { align-items: center; }
 .fdial-k { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--f-ink2, var(--ink)); padding: 0 8px 0 4px; margin-right: 2px; border-right: 1px solid var(--f-line2, var(--line)); cursor: default; user-select: none; }
 .fdial-k::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--acc, #3b82f6); }
+/* 튜터 글 속 표(11/13) */
+.rich .rtable { overflow-x: auto; margin: 6px 0; }
+.rich table { border-collapse: collapse; font-size: 13px; }
+.rich th, .rich td { border: 1px solid var(--line, rgba(128,128,128,.35)); padding: 4px 8px; vertical-align: top; }
+.rich th { background: rgba(128,128,128,.12); font-weight: 600; white-space: nowrap; }
