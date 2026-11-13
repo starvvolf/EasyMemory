@@ -20,7 +20,7 @@ export const SHELL_TOOL = {
 
 export type Kind = "auto" | "ask";
 export type Pending = { id: string; command: string; why: string; reason: string; at: string; background?: boolean };
-export type Ran = { command: string; by: "auto" | "learner-ok" | "learner"; code: number | null; out: string; ms: number; at: string; cwd?: string; told?: boolean };
+export type Ran = { command: string; by: "auto" | "learner-ok" | "learner"; code: number | null; out: string; ms: number; at: string; cwd?: string; told?: boolean; key?: string; running?: boolean };
 type ShellState = { pending: Pending | null; history: Ran[]; refused: { command: string; at: string; told?: boolean }[] };
 const file = (runId: string) => path.join(DATA, "shell", `${runId}.json`);
 const empty = (): ShellState => ({ pending: null, history: [], refused: [] });
@@ -248,19 +248,24 @@ export async function decide(runId: string, ws: string | undefined, id: string, 
 }
 
 /** 학습자가 VS Code 터미널에서 친 명령(확장이 보냄, 작업 폴더 안만) */
-export async function learnerRan(runId: string, b: { command?: unknown; exitCode?: unknown; cwd?: unknown; output?: unknown }) {
+export async function learnerRan(runId: string, b: { command?: unknown; exitCode?: unknown; cwd?: unknown; output?: unknown; key?: unknown; running?: unknown }) {
   const command = String(b.command ?? "").trim().slice(0, 2000);
   if (!command) return { ok: false };
-  const ran: Ran = { command, by: "learner", code: typeof b.exitCode === "number" ? b.exitCode : null, out: clip(String(b.output ?? ""), 3000), ms: 0, at: new Date().toISOString(), cwd: String(b.cwd ?? "").slice(0, 200), told: false };
-  await (await import("./learner-note.ts")).noteEnv(ran.command, ran.code, ran.out).catch(() => null);
-  await update<ShellState>(file(runId), empty(), (s) => { s.history.push(ran); if (s.history.length > 50) s.history.splice(0, s.history.length - 50); });
-  return { ok: true };
+  // 0.9.7 확장(11/13): 아직 도는 명령(서버 등)의 지금까지 출력은 running으로 오고, 같은 key의 앞 것을 갈아 끼운다. 끝나면 같은 key로 최종본이 온다
+  const key = typeof b.key === "string" ? b.key.slice(0, 40) : undefined, running = b.running === true;
+  const ran: Ran = { command, by: "learner", code: running ? null : typeof b.exitCode === "number" ? b.exitCode : null, out: clip(String(b.output ?? ""), 3000), ms: 0, at: new Date().toISOString(), cwd: String(b.cwd ?? "").slice(0, 200), told: false, ...(key ? { key } : {}), ...(running ? { running } : {}) };
+  if (!running) await (await import("./learner-note.ts")).noteEnv(ran.command, ran.code, ran.out).catch(() => null);
+  await update<ShellState>(file(runId), empty(), (s) => {
+    if (key) s.history = s.history.filter((r) => !(r.key === key && r.running));
+    s.history.push(ran); if (s.history.length > 50) s.history.splice(0, s.history.length - 50);
+  });
+  return { ok: true, running };
 }
 /** 판정용: 어느 때 뒤로 학습자가 친 명령과 결과 */
 export async function learnerRunsSince(runId: string, since: string) {
   return (await shellOf(runId)).history.filter((r) => r.by === "learner" && r.at >= since);
 }
-const ranLine = (r: Ran) => `\`${r.command}\`${r.cwd ? ` (폴더 ${r.cwd})` : ""} → 종료 코드 ${r.code ?? "모름"}\n${clip(r.out, 1500) || "(출력 없음)"}`;
+const ranLine = (r: Ran) => `\`${r.command}\`${r.cwd ? ` (폴더 ${r.cwd})` : ""} → ${r.running ? "아직 실행 중(지금까지 출력)" : `종료 코드 ${r.code ?? "모름"}`}\n${clip(r.out, 1500) || "(출력 없음)"}`;
 /** 매 차례 맥락: 학습자가 거절한 명령 · 터미널에서 친 명령은 한 번만 알린다(최근 5개) */
 export async function shellContext(runId: string): Promise<string> {
   const s = await shellOf(runId);

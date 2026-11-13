@@ -207,7 +207,7 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
   const names = used.length ? `\n\n[이 실습에서 이미 쓴 지식 이름 — 같은 지식이면 새 이름을 만들지 말고 이 이름을 글자 그대로 쓴다]\n${used.join(" · ")}` : "";
   // 학습자가 터미널에서 돌린 것(11/12, 총정리 장면에 실제 화면을 보이려고): 이 목표 동안 최대 8개, 출력은 끝부분
   const runs = (await (await import("./shell.ts")).learnerRunsSince(runId, goal.at).catch(() => [])).filter((r) => r.at <= (redo?.to ?? new Date().toISOString())).slice(-8);
-  const runText = runs.length ? `\n\n[학습자가 터미널에서 돌린 것]\n${runs.map((r) => `$ ${r.command} → 종료 코드 ${r.code ?? "모름"}\n${r.out.split("\n").slice(-6).join("\n").slice(-600)}`).join("\n")}` : "";
+  const runText = runs.length ? `\n\n[학습자가 터미널에서 돌린 것]\n${runs.map((r) => `$ ${r.command} → ${r.running ? "실행 중" : `종료 코드 ${r.code ?? "모름"}`}\n${r.out.split("\n").slice(-6).join("\n").slice(-600)}`).join("\n")}` : "";
   // 막힌 순간(11/12 B의 정책 문서 "타임라인 뼈대로 주면 AI가 짐작할 게 줄어요"): 이 목표 동안 열린 것
   const ms = (await (await import("./moments.ts")).momentsOf(runId).catch(() => [])).filter((m) => m.openedAt >= goal.at && m.openedAt <= (redo?.to ?? new Date().toISOString())).slice(-8);
   const momentText = ms.length ? `\n\n[막힌 순간]\n${ms.map((m) => `- ${m.by}${m.command ? ` \`${m.command}\`` : ""}${m.error ? ` → ${m.error}` : m.gap ? ` → ${m.gap}` : m.reasons ? ` → ${m.reasons}` : ""} · ${m.how ?? "아직 막힘"} · 다시 해 본 ${m.tries}번${m.help.edits.length ? ` · 튜터가 고친 파일 ${m.help.edits.join(", ")}` : ""}`).join("\n")}` : "";

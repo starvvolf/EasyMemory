@@ -298,7 +298,7 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   // 판정에는 과제 뒤 저장한 파일의 최신본 전체(줄 번호, 200줄까지) — 바뀐 줄만 주면 안 바뀐 줄을 "없다"고 봄(11/8 실측)
   const code = [...lastBy].filter(([f, t]) => (beforeBy.get(f) ?? "") !== t).map(([f, t]) => `[저장한 코드 ${f} — 최신본]\n${t.split(/\r?\n/).slice(0, 200).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`);
   // 학습자가 과제 뒤 VS Code 터미널에서 친 명령과 결과(마지막 5개)도 한 것으로 본다(11/8)
-  const typed = (await (await import("./shell.ts")).learnerRunsSince(runId, since)).slice(-5).map((r) => `[학습자가 터미널에서 친 명령] ${r.command}\n종료 코드 ${r.code ?? "모름"}\n${r.out.slice(-1500)}`);
+  const typed = (await (await import("./shell.ts")).learnerRunsSince(runId, since)).slice(-5).map((r) => `[학습자가 터미널에서 친 명령] ${r.command}\n${r.running ? "아직 실행 중(지금까지 출력)" : `종료 코드 ${r.code ?? "모름"}`}\n${r.out.slice(-1500)}`);
   // 과제가 가리키는 코드(11/8 실측: "goals.ts 119줄을 따라가 보라"는 과제에서 판정이 코드를 못 봐 틀린 답을 맞은 부분으로 봄)
   const taskText = lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task;
   const refs = await referencedCode(runId, taskText).catch(() => "");

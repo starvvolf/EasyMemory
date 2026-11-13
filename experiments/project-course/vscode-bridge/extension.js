@@ -519,13 +519,22 @@ function goOfflineSoon() {
 // 셸 통합이 있는 VS Code(1.93+)에서만. 작업 폴더 안에서 친 명령만 보낸다(다른 폴더 일은 안 보냄)
 const termBufs = new WeakMap();
 const stripAnsi = (t) => String(t).replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "").replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, "").replace(/\r(?!\n)/g, "\n");
+const running = new Set();
+async function sendRunning() {
+  for (const b of running) {
+    if (!runId || !b.command || !b.out) continue;
+    const cwd = b.cwd ? b.cwd.fsPath : "";
+    if (!cwd || !(path.resolve(cwd).toLowerCase() + path.sep).startsWith(path.resolve(root).toLowerCase() + path.sep)) continue;
+    await request("POST", "/api/bridge/terminal", { runId, command: b.command.slice(0, 2000), exitCode: null, running: true, key: b.key, cwd: path.relative(root, cwd).split(path.sep).join("/"), output: stripAnsi(b.out).slice(-12000) }).catch(() => {});
+  }
+}
 function watchTerminal(context) {
   const w = vscode.window;
   if (!w.onDidStartTerminalShellExecution || !w.onDidEndTerminalShellExecution) return;
   context.subscriptions.push(
     w.onDidStartTerminalShellExecution((e) => {
-      const buf = { out: "", done: null };
-      termBufs.set(e.execution, buf);
+      const buf = { out: "", done: null, key: `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, command: (e.execution.commandLine && e.execution.commandLine.value || "").trim(), cwd: e.execution.cwd || (e.shellIntegration && e.shellIntegration.cwd) };
+      termBufs.set(e.execution, buf); running.add(buf);
       buf.done = (async () => { try { for await (const d of e.execution.read()) { buf.out += d; if (buf.out.length > 60000) buf.out = buf.out.slice(-30000); } } catch { /* 읽기 실패는 출력 없이 */ } })();
     }),
     w.onDidEndTerminalShellExecution(async (e) => {
@@ -537,9 +546,13 @@ function watchTerminal(context) {
       const inside = cwd && (path.resolve(cwd).toLowerCase() + path.sep).startsWith(path.resolve(root).toLowerCase() + path.sep);
       if (!inside) return;
       const buf = termBufs.get(e.execution) || { out: "", done: null };
+      running.delete(buf);
       if (buf.done) await Promise.race([buf.done, new Promise((r) => setTimeout(r, 800))]);
       const rel = path.relative(root, cwd).split(path.sep).join("/");
-      request("POST", "/api/bridge/terminal", { runId, command: command.slice(0, 2000), exitCode: typeof e.exitCode === "number" ? e.exitCode : null, cwd: rel, output: stripAnsi(buf.out).slice(-12000) }).catch(() => {});
+      await request("POST", "/api/bridge/terminal", { runId, command: command.slice(0, 2000), exitCode: typeof e.exitCode === "number" ? e.exitCode : null, cwd: rel, output: stripAnsi(buf.out).slice(-12000), ...(buf.key ? { key: buf.key } : {}) }).catch(() => {});
+      // 0.9.7(11/13 사용자 "안 꺼도 볼 수 있으면 안 돼?"): 서버처럼 계속 도는 명령은 끝나야 출력이 갔다 — 클라이언트를 돌리고 나면
+      // 튜터가 "이번 클라이언트 결과"와 "한 번 전에 끈 서버 로그"를 짝지었다. 명령 하나가 끝날 때마다 아직 도는 명령의 지금까지 출력도 보낸다.
+      await sendRunning();
     }),
   );
 }

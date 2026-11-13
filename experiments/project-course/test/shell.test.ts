@@ -91,3 +91,21 @@ test("명령이 몰래 파일을 바꾸면(11/12): 허락이 없으면 결과에
   const ok = await runCommandTool("w4", ws, { command: "node -e \"console.log(1)\"" }, { edit: false });
   assert.ok(!ok.includes("[주의]"), ok);
 });
+
+test("0.9.7: 아직 도는 명령의 출력은 같은 key로 갈아 끼우고, 끝나면 최종본으로", async () => {
+  const S = await import("../lib/shell.ts");
+  const id = `t${Date.now().toString(36)}`;
+  await S.learnerRan(id, { command: ".\\runserver", running: true, key: "k1", output: "서버 시작" });
+  await S.learnerRan(id, { command: ".\\runclient", exitCode: 0, output: "A 95 B 80" });
+  await S.learnerRan(id, { command: ".\\runserver", running: true, key: "k1", output: "서버 시작\n저장한 체력: 80" });
+  let h = (await S.shellOf(id)).history;
+  assert.equal(h.length, 2);
+  assert.equal(h[1].running, true);
+  assert.match(h[1].out, /80/);
+  assert.match(await S.shellContext(id), /아직 실행 중/);
+  await S.learnerRan(id, { command: ".\\runserver", exitCode: 1, key: "k1", output: "끝" });
+  h = (await S.shellOf(id)).history;
+  assert.equal(h.length, 2);
+  assert.equal(h[1].running, undefined);
+  assert.equal(h[1].code, 1);
+});
