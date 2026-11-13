@@ -581,12 +581,12 @@ function Chat({ pageRef, focusIds, where }: { pageRef: React.RefObject<HTMLDivEl
   );
   return (
     <div className={`lib-chat${msgs.length || busy ? " has" : ""}`}>
-      <button className="lib-chat-fold" onClick={() => fold(true)} title="채팅창 접기" aria-label="채팅창 접기">▾ 접기</button>
       {msgs.length || busy ? <div className="lib-log" ref={log}>{msgs.map((m, i) => <div key={i} className={`lib-msg ${m.role}`}>{m.role === "ai" ? <Inline text={m.text} /> : m.text}</div>)}
         {busy ? <div className="lib-msg ai wait"><span className="lib-dots"><i /><i /><i /></span></div> : null}</div> : null}
       <form className="lib-in" onSubmit={(e) => { e.preventDefault(); void send(); }}>
         <textarea value={text} rows={1} onChange={(e) => setText(e.target.value)} placeholder={`${where} — 내 기억에 대해 물어보세요`} aria-label="기억에 대해 묻기"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
+        <button className="lib-chat-fold" type="button" onClick={() => fold(true)} title="채팅창 접기" aria-label="채팅창 접기">접기 ▾</button>
         <button className="lib-send" type="submit" disabled={busy || !text.trim()} aria-label="보내기">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4" /></svg>
         </button>
