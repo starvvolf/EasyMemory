@@ -6,6 +6,7 @@
 //   node scripts/demo-state.mjs save <이름> [폴더…]   지금 상태를 <데이터 폴더>/../RecallerDemo/<이름>에 저장
 //   node scripts/demo-state.mjs restore <이름>         저장한 상태로 되돌림(그 뒤에 생긴 파일은 지움)
 //   node scripts/demo-state.mjs list
+//   node scripts/demo-state.mjs import <시연데이터 폴더>  다른 컴퓨터에서 가져온 시연 틀(algo · fps)을 이 컴퓨터에 넣기(11/13)
 //
 // 데이터 폴더: --data <경로> > STUDY_FORGE_DATA_DIR(환경 변수) > .env.local의 STUDY_FORGE_DATA_DIR
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -39,8 +40,25 @@ async function main() {
   const [cmd, name, ...dirs] = args;
   const data = await dataDir();
   const store = path.join(path.dirname(data), "RecallerDemo");
+  if (cmd === "import") {
+    // 시연데이터 폴더: algo/(알고리즘 · 기억 틀) · fps/(실습 시연 틀). 실습 틀은 experiments/project-course/.data/demo/<이름>으로
+    const from = path.resolve(name ?? "");
+    for (const e of await readdir(from, { withFileTypes: true }).catch(() => [])) {
+      if (!e.isDirectory()) continue;
+      const src = path.join(from, e.name);
+      const isLab = !!(await stat(path.join(src, "chat-head.json")).catch(() => null)) || !!(await stat(path.join(src, "run")).catch(() => null));
+      const to = isLab ? path.join(ROOT, "experiments", "project-course", ".data", "demo", e.name) : path.join(store, e.name);
+      if (isLab) { // 다른 컴퓨터의 시연용 실습 id는 여기 없으니 비운다(되돌릴 때 새로 만든다)
+        await rm(to, { recursive: true, force: true }); await cp(src, to, { recursive: true });
+        const mf = path.join(to, "meta.json"); const m = JSON.parse(await readFile(mf, "utf8")); delete m.demoRun; await writeFile(mf, JSON.stringify(m, null, 1));
+      } else { await rm(to, { recursive: true, force: true }); await cp(src, to, { recursive: true }); }
+      console.log(`- ${e.name}: ${isLab ? "실습 시연 틀" : "알고리즘 · 기억 틀"} → ${to}`);
+    }
+    console.log("넣었어요. 이제 tools\\시연 준비.cmd를 실행하세요.");
+    return;
+  }
   if (cmd === "list") { console.log((await readdir(store).catch(() => [])).join("\n") || "(없음)"); return; }
-  if (!name || !/^[\w-]+$/.test(name)) throw new Error("이름을 영문 · 숫자로 주세요. 예: algo");
+  if (cmd !== "import" && (!name || !/^[\w-]+$/.test(name))) throw new Error("이름을 영문 · 숫자로 주세요. 예: algo");
   const snap = path.join(store, name);
   if (cmd === "save") {
     const pick = dirs.length ? dirs : ["code", "knowledge"];
