@@ -40,6 +40,9 @@ export type Gap = {
   state: GapState;
   createdAt: string;
   /** 사람이(또는 원인 미확정이 쌓여) 다시 볼 빈틈 */ doubtful?: boolean;
+  /** 학습자가 [이건 아는 거였어요]로 뺀 빈틈(뽑기가 틀렸을 수 있음). 복습에 안 나온다. */ dismissed?: boolean;
+  marks?: GapMark[];
+  /** 기억 저장소 항목 id(빈틈은 기억 저장소의 항목으로도 남는다) */ knowledgeId?: string;
 };
 
 /** 형식 (설계 3번). 1~12 공통, 13~17 실습 전용. */
@@ -83,6 +86,7 @@ export type Scene = {
   /** 실습 형식의 재료(src/lib/scene/practice/) */ practice?: Record<string, unknown>;
   computed?: { expected: string[]; shapes: Record<string, string[]> };
   check?: { ok: boolean; problems: string[] };
+  /** 같은 생각(빈틈의 topic): 은행에서 다른 빈틈 id로도 다시 쓴다 */ topic?: string; bankedTo?: string;
   createdAt: string; madeBy: "record" | "ai" | "bank";
 };
 

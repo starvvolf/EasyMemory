@@ -3,7 +3,7 @@
 import { judge, type TestCase } from "../code/run.ts";
 import { readProblem, readSubmissions, type Submission } from "../code/problems.ts";
 import { askJson } from "../assist/model.ts";
-import { langOf } from "./exec.ts";
+import { langOf, runAll } from "./exec.ts";
 import { doseOf, firstState, scopeOf } from "./ladder.ts";
 import { EXTRACT_SCHEMA, EXTRACT_SYSTEM, type ExtractReply } from "./prompts.ts";
 import { changeGaps, newId, readGaps } from "./store.ts";
@@ -65,6 +65,33 @@ async function verifyWrong(rec: Record_, lang: string, code: string) {
   return { verified: true as const, verdict: j.verdict };
 }
 
+/** 두 글의 편집 거리(짧은 줄용) */
+function edits(a: string, b: string) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)] as number[]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function isSlip(rec: Record_, evidence: Evidence[], asked: number) {
+  if (asked > 0 || evidence.some((e) => e.type === "talk")) return false;
+  const wrong = evidence.filter((e) => e.type === "submission" && e.verdict !== "AC");
+  if (wrong.length !== 1 || wrong[0].type !== "submission") return false;
+  const k = rec.subs.findIndex((x) => x.id === (wrong[0] as { id: string }).id);
+  const a = rec.subs[k]; const b = rec.subs[k + 1];
+  if (!a || !b) return false;
+  const la = a.code.replace(/\r/g, "").split("\n"); const lb = b.code.replace(/\r/g, "").split("\n");
+  if (la.length !== lb.length) return false;
+  const changed = la.map((l, i) => [l, lb[i]] as const).filter(([x, y]) => x !== y);
+  return changed.length === 1 && edits(changed[0][0].trim(), changed[0][1].trim()) <= 2;
+}
+/** 알맹이 코드가 문법으로는 맞나(설계 1번 검사 2). 가정한 변수가 있어 실행은 못 하니 구문만 본다(파이썬 · 자바스크립트). */
+async function parses(lang: string, code: string) {
+  if (!code.trim()) return true;
+  if (lang === "python") { const [r] = await runAll("python", "import ast, sys\nast.parse(sys.stdin.read())", [code]); return r.ok; }
+  if (lang === "javascript") { const [r] = await runAll("javascript", "const s = require('fs').readFileSync(0, 'utf8'); new Function(s);", [code]); return r.ok; }
+  return true;
+}
+
 export async function extractGaps(problemId: string, opts: { ask?: Ask; force?: boolean; rec?: Record_ } = {}): Promise<Gap[]> {
   const before = (await readGaps()).filter((g) => g.origin.problemId === problemId);
   if (before.length && !opts.force) return before;
@@ -82,6 +109,8 @@ export async function extractGaps(problemId: string, opts: { ask?: Ask; force?: 
       return t ? [{ type: "talk", at: t.at, ...(e.quote ? { quote: e.quote.slice(0, 200) } : {}) }] : [];
     });
     if (!evidence.length) continue;
+    // 오타 · 실수 거르기(설계 1번 검사 5): 틀린 제출 하나뿐이고, 묻지 않았고, 바로 다음 제출에서 한 줄 · 두 글자 이내로 고쳤으면 빈틈이 아니다
+    if (isSlip(rec, evidence, g.signals?.asked ?? 0)) continue;
     // 그때 생각이 정말 틀렸나: 원래 문제에서 맞으면 빈틈이 아니다
     // 표현 빈틈도 그때 코드가 있으면 돌려 본다(예: [[]]*N은 실제로 틀린 답을 낸다 → 같은 실수를 가를 수 있음). 맞게 돌면 능력 빈틈은 버리고 표현 빈틈은 남긴다.
     // 코드로 옮기지 못한 빈틈(wrongCode "")이라도 증거가 가리키는 틀린 제출(실행은 된 것)이 있으면 그것으로 확인한다 — 그때 생각이 실제로 틀렸다는 증거
@@ -94,7 +123,7 @@ export async function extractGaps(problemId: string, opts: { ask?: Ask; force?: 
     made.push({ id: newId("gap"), branch: "algo", kind, layer: LAYER[kind], title: g.title.slice(0, 80), target: g.target === "form" ? "form" : "ability",
       missed: g.missed.slice(0, 300), wrong: (g.wrong ?? "").slice(0, 300), ...(g.wrongCode?.trim() ? { wrongCode: g.wrongCode } : {}),
       wrongVerified: v.verified, ...(v.verified ? { wrongVerdict: v.verdict } : {}),
-      kernel: { lang, code: g.kernel?.code ?? "", needs: g.kernel?.needs ?? [] }, evidence,
+      kernel: { lang, code: await parses(lang, g.kernel?.code ?? "") ? g.kernel?.code ?? "" : "", needs: g.kernel?.needs ?? [] }, evidence,
       origin: { problemId, title: rec.title, lang }, topic: (g.topic || `${kind}.${g.title}`).slice(0, 60),
       scope: g.target === "form" ? "line" : scopeOf(kind, signals), dose: { level: dose }, state: firstState(dose), createdAt: new Date().toISOString() });
   }

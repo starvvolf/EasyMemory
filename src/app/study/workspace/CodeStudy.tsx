@@ -235,7 +235,9 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     return () => clearInterval(t);
   }, [id, help, isBoj]);
   const [asking, setAsking] = useState(false);
-  const [question, setQuestion] = useState("");
+  // 상황 재현의 [튜터와 다시 보기]가 건넨 말을 질문 칸에 미리 넣는다(11/15 [경계] A, scene/Scene.tsx)
+  const [question, setQuestion] = useState(() => { try { return sessionStorage.getItem(`code:ask:${id}`) ?? ""; } catch { return ""; } });
+  useEffect(() => { try { sessionStorage.removeItem(`code:ask:${id}`); } catch { /* 없음 */ } }, [id]);
   const [error, setError] = useState("");
   const editor = useRef<EditorHandle | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

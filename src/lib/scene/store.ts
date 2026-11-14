@@ -38,3 +38,23 @@ export async function unusedScene(gapId: string, distance: string): Promise<Scen
   return all.filter((x): x is Scene => Boolean(x && x.gapId === gapId && x.distance === distance && x.check?.ok && !done.has(x.id)))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
 }
+/**
+ * 은행(설계 5번): 문법 · 자료 구현처럼 사람과 상관없는 장면은 같은 생각(topic)이면 다른 빈틈의 것도 다시 쓴다.
+ * 이 빈틈 · 같은 거리의 것을 먼저, 없으면 같은 생각의 장면 중 검사를 통과했고 아직 안 푼 것.
+ */
+export async function bankScene(topic: string, distance: string, gapId: string): Promise<Scene | null> {
+  const own = await unusedScene(gapId, distance);
+  if (own) return own;
+  let names: string[] = [];
+  try { names = (await readdir(path.join(root(), "scenes"))).filter((n) => /^sc_[a-f0-9]{12}\.json$/.test(n)); } catch { return null; }
+  const done = new Set((await readAttempts()).map((a) => a.sceneId));
+  const all = await Promise.all(names.map((n) => readScene(n.slice(0, -5))));
+  const hit = all.filter((x): x is Scene => Boolean(x && x.topic === topic && x.distance === distance && x.check?.ok && !done.has(x.id) && x.madeBy !== "record" && !x.bankedTo))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  if (!hit) return null;
+  // 이 빈틈의 장면으로 복사(채점 · 반영이 이 빈틈에 가게)
+  const copy: Scene = { ...hit, id: newId("sc"), gapId, madeBy: "bank", createdAt: new Date().toISOString() };
+  await saveScene(copy);
+  await saveScene({ ...hit, bankedTo: copy.id });
+  return copy;
+}

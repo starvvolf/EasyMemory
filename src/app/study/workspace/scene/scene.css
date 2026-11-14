@@ -47,3 +47,14 @@ pre.bad, .sc-err { color: var(--bad); }
 .sc-gaplist > li.known { opacity: .65; }
 .sc-gapline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sc-today { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+
+/* 11/15 형식 더함: 순서 맞추기 · 접힌 줄 · 표시한 줄 · 왜인지 한 줄 · 그때 내 코드 · 오늘 탭 갈래 줄 */
+.sc-order { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
+.sc-order li { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid var(--line, #e3e5ea); border-radius: 8px; background: var(--card, #fff); }
+.sc-order code { white-space: pre; font-family: var(--mono, ui-monospace, monospace); font-size: 13px; }
+.sc-fold summary { cursor: pointer; padding: 2px 0; }
+.sc-mark { background: color-mix(in srgb, #f5b041 28%, transparent); display: inline-block; width: 100%; }
+.sc-then-view { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.sc-why { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.sc-whywrap summary { cursor: pointer; }
+.sc-todays { display: flex; flex-direction: column; gap: 6px; }

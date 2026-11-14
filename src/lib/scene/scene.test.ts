@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { checkScene } from "./check.ts";
 import { gradeScene } from "./grade.ts";
-import { dueToday, firstState, formatOf, reflect, scopeOf, doseOf } from "./ladder.ts";
+import { dueToday, firstState, formatOf, formatsFor, reflect, scopeOf, doseOf } from "./ladder.ts";
 import type { Gap, Scene } from "./types.ts";
 
 // 11651류: 점수 높은 순, 같으면 이름순 (설계 5번의 예)
@@ -83,7 +83,8 @@ test("사다리 · 범위 · 세기: 틀린 횟수는 범위를 키우지 않고
   g = reflect(g, "pass", {}, 0); g = reflect(g, "pass", {}, 0); assert.equal(g.state.distance, "far"); assert.equal(g.state.known, false);
   g = reflect(g, "pass", {}, 0); assert.equal(g.state.known, true, "응용 통과 = 앎");
   const h = reflect(gap(), "pass", { hinted: true }, 0); assert.equal(h.state.distance, "near", "힌트 보고 통과는 몰랐음");
-  assert.equal(formatOf({ ...gap(), state: { ...gap().state, distance: "same" } }, true), "fix");
+  assert.equal(formatOf({ ...gap(), scope: "piece", state: { ...gap().state, distance: "same" } }, true), "fix");
+  assert.equal(formatsFor({ ...gap(), scope: "line", state: { ...gap().state, distance: "same" } }, { hasWrongSubmission: true })[0], "blank", "한 줄 범위의 똑같이 = 그 줄만 다시 쓰기");
   assert.equal(formatOf({ ...gap(), kind: "한 줄 읽기" }, false), "predict");
   const due = dueToday([gap({ id: "a", layer: 5, scope: "piece" }), gap({ id: "b", layer: 1 })], Date.now() + 9e9);
   assert.equal(due.gaps[0].id, "b", "낮은 층부터");

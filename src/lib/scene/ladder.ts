@@ -56,25 +56,53 @@ export function reflect(gap: Gap, verdict: SceneVerdict, o: { hinted?: boolean; 
   return { ...gap, dose: { level }, state: s, ...(s.unclear >= 3 && s.passes === 0 ? { doubtful: true } : {}) };
 }
 
-/** 종류 · 범위 · 거리 · 확인할 것 → 형식 (표 한 장, 설계 4번). 똑같이는 그때 틀린 코드가 있으면 고치기. */
-export function formatOf(gap: Pick<Gap, "kind" | "scope" | "target" | "state" | "evidence">, hasWrongSubmission: boolean): Format {
-  if (gap.state.distance === "same" && hasWrongSubmission) return "fix";
-  if (gap.target === "form") return "blank";
-  switch (gap.kind) {
-    case "한 줄 읽기": case "알고리즘 원리": return "predict";
-    case "알고리즘 고르기": case "실행 · 도구": case "오류 읽기": return "choice";
-    case "자료 담기": return gap.state.distance === "far" ? "write" : "choice";
-    case "문제 읽기": return gap.state.distance === "far" ? "write" : "choice";
-    case "알고리즘 구현": case "자료 구현": return gap.scope === "function" ? "write" : "blank";
-    default: return "write";
+/** 그 빈틈이 출력을 틀리게 만드나(고치기 · 반례 만들기는 이때만, 설계 3번 v2). 느려지기만 하는 빈틈(시간 초과)은 결과 맞히기(횟수)로. */
+export const showsInOutput = (gap: Pick<Gap, "wrongVerified" | "wrongVerdict">) => gap.wrongVerified && ["WA", "RE"].includes(gap.wrongVerdict ?? "");
+
+/**
+ * 종류 · 범위 · 거리 · 확인할 것 → 형식 순서 (설계 4번 표 한 장). 앞이 기본, 재료가 없으면(만들기 · 검사 실패) 다음.
+ * 똑같이는 그때 내 코드: 한 줄 범위는 그 줄 근처만 잘라 다시 쓰기(same-line, 빈칸), 조각 이상은 틀린 곳 고치기.
+ */
+export function formatsFor(gap: Pick<Gap, "kind" | "scope" | "target" | "state" | "wrongVerified" | "wrongVerdict">, ctx: { hasWrongSubmission: boolean; lang?: string }): Format[] {
+  const out: Format[] = [];
+  const far = gap.state.distance === "far";
+  if (gap.state.distance === "same" && ctx.hasWrongSubmission) out.push(gap.scope === "line" ? "blank" : "fix");
+  const visible = showsInOutput(gap);
+  const py = !ctx.lang || ctx.lang === "python";
+  if (gap.target === "form") out.push("write", "blank");
+  else switch (gap.kind) {
+    case "문법": out.push("write", "blank"); break;
+    case "자료 담기": out.push(...(py ? ["choice", "draw"] as Format[] : ["choice"] as Format[])); break;
+    case "자료 구현": out.push(...(gap.scope === "function" ? ["function", "blank"] as Format[] : ["blank", "write"] as Format[])); break;
+    case "한 줄 읽기": out.push("predict"); break;
+    case "알고리즘 고르기": out.push(...(far ? ["variant", "choice"] as Format[] : ["choice"] as Format[])); break;
+    case "알고리즘 원리": out.push(...(visible ? ["predict", "counter"] as Format[] : ["predict"] as Format[])); break;
+    case "알고리즘 구현": out.push(...(gap.scope === "function" ? ["function", "order"] as Format[] : ["order", "blank"] as Format[])); break;
+    case "경계 · 예외": out.push(...(visible ? ["counter", "fix"] as Format[] : ["write"] as Format[])); break;
+    case "문제 읽기": out.push("choice", "predict"); break;
+    case "실행 · 도구": out.push("write", "error"); break;
+    case "오류 읽기": out.push(...(visible ? ["error", "fix"] as Format[] : ["error"] as Format[])); break;
+    case "순서 · 동시성": out.push("timeline", "where"); break;
   }
+  return [...new Set(out)];
+}
+/** 예전 이름(첫째 형식) */
+export function formatOf(gap: Pick<Gap, "kind" | "scope" | "target" | "state" | "evidence"> & Partial<Pick<Gap, "wrongVerified" | "wrongVerdict">>, hasWrongSubmission: boolean): Format {
+  const f = formatsFor({ wrongVerified: false, ...gap }, { hasWrongSubmission });
+  return gap.state.distance === "same" && hasWrongSubmission && gap.scope !== "line" ? "fix" : f[0] ?? "write";
 }
 /** 하루 분량(설계 4번): 오늘 볼 빈틈, 낮은 층부터. 장면 하나 약 1~4분, 기본 10분까지. */
 export const MINUTES: Record<Format, number> = { write: 1, blank: 2, predict: 1, fix: 3, choice: 1, order: 2, function: 7, counter: 2, draw: 2, variant: 15, error: 1, why: 1,
   where: 2, timeline: 2, command: 1, project: 15, origin: 10 };
 export function dueToday(gaps: Gap[], now = Date.now(), budget = 10) {
-  const due = gaps.filter((g) => !g.state.known && Date.parse(g.state.due) <= now).sort((a, b) => a.layer - b.layer || Date.parse(a.state.due) - Date.parse(b.state.due));
+  // 아래층부터(설계 4번): 같은 풀이의 문법 빈틈이 한 번 통과되기 전에는 그 풀이의 함수 · 문제 범위 장면을 미룬다
+  const blocked = (g: Gap) => (g.scope === "function" || g.scope === "project" || g.state.distance === "far" && g.kind === "알고리즘 고르기") &&
+    gaps.some((x) => x.id !== g.id && x.layer === 1 && !x.state.known && x.state.passes === 0 && sameOrigin(x, g));
+  const due = gaps.filter((g) => !g.state.known && !g.dismissed && Date.parse(g.state.due) <= now && !blocked(g)).sort((a, b) => a.layer - b.layer || Date.parse(a.state.due) - Date.parse(b.state.due));
   const out: Gap[] = []; let used = 0;
-  for (const g of due) { const m = g.scope === "function" ? 6 : g.scope === "piece" ? 3 : 1; if (out.length && used + m > budget) break; out.push(g); used += m; }
-  return { gaps: out, minutes: used, more: due.length - out.length };
+  for (const g of due) { const m = SCOPE_MIN[g.scope]; if (out.length && used + m > budget) break; out.push(g); used += m; }
+  const waiting = gaps.filter((g) => !g.state.known && !g.dismissed && Date.parse(g.state.due) <= now && blocked(g)).length;
+  return { gaps: out, minutes: used, more: due.length - out.length, waiting };
 }
+export const SCOPE_MIN: Record<Scope, number> = { line: 1, piece: 3, function: 7, project: 15 };
+const sameOrigin = (a: Gap, b: Gap) => a.origin.problemId && a.origin.problemId === b.origin.problemId || Boolean(a.origin.runId) && a.origin.runId === b.origin.runId;
