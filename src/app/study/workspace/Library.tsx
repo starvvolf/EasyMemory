@@ -13,8 +13,8 @@ import { MemoryShelf } from "./MaterialMap";
 import { BRANCH_KEY, loadShelfRows, materialEntries, setBranch as shareBranch, shelfSel } from "./shelf";
 import { Inline, Rich } from "./Rich";
 import "./library.css";
-import { ReviewProgress, useReviewStream } from "./ReviewProgress";
 import { Ic, MdReviewView, RvRich } from "./ReviewView";
+import { GapList } from "./scene/Scene";
 
 type Branch = "material" | "code" | "project";
 const BRANCHES: Array<[Branch, string]> = [["material", "자료"], ["code", "알고리즘"], ["project", "실습"]];
@@ -412,67 +412,6 @@ function TalkScene({ t }: { t: Talk }) {
     </details>
   </div>;
 }
-/* ---------- 총정리(B, 11/12) ----------
- * 사용자 "총정리만 봐도 기억이 나야 돼… 다른 사람이 봐도 이해가", "깐깐하게 부족한 점", "처음 만들 때 스트리밍으로", "가독성 좋게 박스".
- * 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다. 없으면 이 자리에서 만들며 받는 대로 보여 준다(스트리밍). 위에는 코드가 센 사실 한 줄. */
-type Weak = { kind: string; size?: string; title: string; state: string; lesson: string };
-type StoryBeat = { text: string; weak?: Weak };
-type Review = { v?: number; situation: string; solve: string; story?: StoryBeat[]; weak?: Array<{ kind?: string; gap: string; seen?: string; why?: string; fill?: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
-type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
-const GAP_KIND: Record<string, string> = { idea: "발상", impl: "구현", syntax: "문법", core: "발상", build: "구현", edge: "발상" };
-function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
-  // 받기는 진행 카드와 같은 훅(11/12): 없으면 만들고, 만드는 중이면 이어 받고, 있으면 바로.
-  const st = useReviewStream(pid);
-  const facts = st.facts as ReviewFacts | null;
-  const md = st.state === "done" ? st.md : "";
-  const rv = st.state === "done" && !st.md ? (st.review as Review | null) : null;
-  const state = st.state;
-  if (state === "none" || (state === "done" && !rv && !md)) return <>{fallback}</>;
-  // 만드는 중(11/12 사용자 "리뷰를 제작 중입니다 하면서 … 끝나면 제작"): 쓰다 만 글 대신 진행 카드, 다 되면 한 번에.
-  if (state === "loading" || state === "live") return <section className="rp-review2"><header className="rv-head"><div className="rv-titlerow"><span className="rv-eyebrow">풀이 노트</span><h3 className="rv-title">총정리</h3></div></header>
-    <ReviewProgress text={st.text} asked={facts?.asked ?? null} /></section>;
-  if (!rv && !md) return null;
-  const live = false;
-  const END = { solved: "맞힘", gaveup: "그만둠", paused: "하다가 나감" } as const;
-  // 읽기 좋게(11/12 사용자 "가독성이 구려… 읽기 좋게 정리가 안 된 느낌"): 글 폭을 줄이고, 문단은 문장마다 한 줄로,
-  // 빈틈은 먼저 한 줄 목록으로 보여 주고 누르면 펼침(맨 위 하나만 펼쳐 둠), "이렇게 채워요"는 눈에 띄는 상자.
-  return <section className="rp-review2">
-    <header className="rv-head">
-      <div className="rv-titlerow"><span className="rv-eyebrow">풀이 노트</span><h3 className="rv-title">총정리</h3>{live ? <span className="lc2-caret" /> : null}</div>
-      {facts ? <div className="rv-factrow">{[[END[facts.end], facts.end === "solved" ? "ok" : "bad"], [facts.hints ? `힌트 ${facts.hints}칸${facts.skeleton ? "·뼈대" : ""}` : "힌트 안 봄", facts.hints ? "help" : ""], [`AI에게 ${facts.asked}번 물음`, facts.asked ? "ask" : ""], [`제출 ${facts.submits}번${facts.wrong ? ` · 틀림 ${facts.wrong}` : ""}`, facts.wrong ? "bad" : ""], [`${facts.minutes}분`, ""]].map(([x, tone]) => <span key={x} className={`rv-fact ${tone}`}>{x}</span>)}</div> : null}
-    </header>
-    {md ? <MdReviewView md={md} /> : rv ? <>
-    <div className="rv-two">
-      {rv.situation ? <div className="rv-intro sit"><div className="rv-introhead"><span className="rv-icon" aria-hidden>?</span>문제 상황</div><Lines text={rv.situation} /></div> : null}
-      {rv.solve ? <div className="rv-intro sol"><div className="rv-introhead"><span className="rv-icon" aria-hidden>✓</span>이렇게 해야 풀려요</div><Lines text={rv.solve} /></div> : null}
-    </div>
-    {rv.story?.length ? <div className="rv-story"><h4 className="rv-sectitle">이렇게 흘러갔어요{(() => { const n = rv.story.filter((x) => x.weak).length; return n ? <span>약점 {n}개</span> : null; })()}</h4>
-      <ol className="rv-flow">{(() => { let n = 0; return rv.story.map((b, i) => { const w = b.weak; if (w) n++; return <li key={i} className={`rv-step${w ? " has" : ""}`}>
-        <p className="rv-tell"><Ic text={b.text} /></p>
-        {w && w.size === "big" ? <article className={`rv-weak big ${w.kind}`}>
-          <header className="rv-weakhead"><span className="rv-core">핵심 약점</span><span className={`rv-chip ${w.kind}`}>약점 {n} · {GAP_KIND[w.kind] ?? "빈틈"}</span>{w.title ? <b className="rv-weaktitle">{w.title}</b> : null}</header>
-          {w.state ? <div className="rv-state"><span className="rv-lab">지금 내 상태</span><p><Ic text={w.state} /></p></div> : null}
-          {w.lesson ? <div className="rv-lesson"><span className="rv-lab">제대로 알아보기</span><RvRich text={w.lesson} /></div> : null}
-        </article> : w ? <aside className={`rv-weak small ${w.kind}`}>
-          <div className="rv-smallhead"><span className={`rv-chip ${w.kind}`}>약점 {n} · {GAP_KIND[w.kind] ?? "빈틈"}</span>{w.title ? <b>{w.title}</b> : null}</div>
-          {w.state ? <p className="rv-smallstate"><Ic text={w.state} /></p> : null}
-          {w.lesson ? <RvRich text={w.lesson} /> : null}
-        </aside> : null}
-      </li>; }); })()}</ol></div> : null}
-    {rv.weak?.length ? <div className="rv-gaps"><h4>비어 있던 것 {rv.weak.length}가지</h4>
-      {rv.weak.map((w, i) => <details key={i} className={`rv-gap ${w.kind ?? ""}`} open={i === 0}>
-        <summary><span className="rv-n">{i + 1}</span><span className="rv-gaptext">{w.gap}</span><span className={`rv-kind ${w.kind ?? ""}`}>{GAP_KIND[w.kind ?? ""] ?? "빈틈"}</span></summary>
-        <div className="rv-body">
-          {w.seen ? <div className="rv-part"><h5>어디서 드러났나</h5><Lines text={w.seen} /></div> : null}
-          {w.why ? <div className="rv-part"><h5>알아야 하는 것</h5><Lines text={w.why} /></div> : null}
-          {(w.pairs ?? []).map((p, j) => <div key={j} className="rv-part"><h5>장면</h5><Lines text={[p.when, p.thought, p.truth].filter(Boolean).join(" ")} /></div>)}
-          {w.fill ? <div className="rv-fill"><h5>이렇게 채워요</h5><Lines text={w.fill} /></div> : null}
-        </div>
-      </details>)}</div> : null}
-    {rv.next ? <div className="rv-intro nxt"><div className="rv-introhead"><span className="rv-icon" aria-hidden>→</span>다음에 떠올릴 것</div><Lines text={rv.next} /></div> : null}
-    </> : null}
-  </section>;
-}
 /** 문단을 문장마다 한 줄로(긴 덩어리 글을 읽기 쉽게). */
 function Lines({ text }: { text: string }) {
   const parts = text.split(/(?<=[.!?]|요\.)\s+(?=\S)/).map((x) => x.trim()).filter(Boolean);
@@ -499,10 +438,8 @@ function SolveView({ log }: { log: SolveLog }) {
     <div className="rp-tags"><span className={`lib-res ${verdict[1]}`}>{verdict[0]}</span>{log.stuck ? <span className="lib-res bad">막힌 곳 · {STUCK[log.stuck] ?? log.stuck}</span> : null}
       {log.help ? <span className="lib-res">도움 {log.help}칸까지 열어 봄</span> : null}{log.fill ? <span className="lib-res">뼈대에서 채우기</span> : null}
       {REDO[log.redo] ? <span className={`lib-res ${log.redo === "done" ? "ok" : log.redo === "due" ? "now" : ""}`}>{REDO[log.redo]}</span> : null}</div>
-    {reviewPid ? <ReviewBox key={reviewPid} pid={reviewPid} fallback={log.gap || log.fix ? <section className="rp-wrong"><p className="eyebrow">오답 노트</p>
-      {log.gap ? <p><span className="lib-k bad">그때 내 생각</span>{log.gap}</p> : null}
-      {log.fix ? <p><span className="lib-k ok">이렇게 풀려요</span>{log.fix}</p> : null}
-      {log.cue ? <p className="small muted"><span className="lib-k">다음에 알아챌 신호</span>{log.cue}</p> : null}</section> : null} />
+    {/* [경계] A 3번 판: 총정리 대신 상황 재현(놓친 생각 → 장면). 예전 총정리는 쓰지 않는다 */}
+    {reviewPid ? <GapList key={reviewPid} problemId={reviewPid} />
     : log.gap || log.fix ? <section className="rp-wrong"><p className="eyebrow">오답 노트</p>
       {log.gap ? <p><span className="lib-k bad">그때 내 생각</span>{log.gap}</p> : null}
       {log.fix ? <p><span className="lib-k ok">이렇게 풀려요</span>{log.fix}</p> : null}

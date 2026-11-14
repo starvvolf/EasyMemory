@@ -1,0 +1,49 @@
+/* 상황 재현 복습 (3번 판) */
+.sc-card, .sc-gaps, .sc-session.done { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.sc-session { display: flex; flex-direction: column; gap: 10px; }
+.sc-top { display: flex; align-items: center; gap: 8px; }
+.sc-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sc-chip { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.sc-chip.soft { background: var(--surface-2); color: var(--muted); font-weight: 600; }
+.sc-ladder { display: inline-flex; gap: 8px; font-size: 11.5px; color: var(--faint); }
+.sc-ladder .ok { color: var(--good); font-weight: 600; }
+.sc-ladder .now { color: var(--accent); font-weight: 700; }
+.sc-then { font-size: 13px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
+.sc-story { font-size: 14.5px; line-height: 1.6; }
+.sc-ask { font-weight: 700; }
+.sc-prog { display: flex; flex-direction: column; gap: 4px; }
+.sc-code { font-family: var(--mono); font-size: 13px; line-height: 1.55; width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); resize: vertical; white-space: pre; overflow-x: auto; tab-size: 4; }
+.sc-code.ro { background: var(--surface-2); color: var(--muted); margin: 0; }
+textarea.sc-code { border-color: var(--accent); min-height: 2.6em; }
+.sc-code.blanks { background: var(--surface-2); margin: 0; white-space: pre-wrap; }
+.sc-blank { font-family: var(--mono); font-size: 13px; border: 0; border-bottom: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink); padding: 0 4px; border-radius: 4px 4px 0 0; }
+.sc-io pre, .sc-run pre, .sc-diff pre, .sc-err { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin: 2px 0; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+.sc-io summary { cursor: pointer; color: var(--muted); }
+.sc-runs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+pre.bad, .sc-err { color: var(--bad); }
+.sc-choices { display: flex; flex-direction: column; gap: 6px; }
+.sc-choice { text-align: left; display: flex; gap: 10px; align-items: baseline; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.sc-choice:hover:not(:disabled) { border-color: var(--accent); }
+.sc-choice.on { border-color: var(--accent); background: var(--accent-soft); }
+.sc-choice.right { border-color: var(--good); background: var(--good-soft); }
+.sc-choice.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.sc-n { font-weight: 800; color: var(--accent); min-width: 14px; }
+.sc-field { display: flex; flex-direction: column; gap: 2px; }
+.sc-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sc-hint { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--help-soft); color: var(--help); }
+.sc-res { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.sc-verdict { font-size: 16px; font-weight: 800; }
+.v-pass .sc-verdict { color: var(--good); }
+.v-same .sc-verdict, .v-unclear .sc-verdict { color: var(--bad); }
+.v-other .sc-verdict { color: var(--help); }
+.sc-diff2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sc-truth { padding: 10px 12px; border-radius: 10px; background: var(--good-soft); display: flex; flex-direction: column; gap: 4px; }
+.sc-lab { font-size: 11px; font-weight: 800; color: var(--good); letter-spacing: .04em; }
+.sc-origin { font-size: 13px; color: var(--ask); }
+.sc-making { color: var(--muted); font-size: 13px; }
+.sc-gapshead { display: flex; align-items: center; gap: 8px; }
+.sc-gaplist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sc-gaplist > li { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.sc-gaplist > li.known { opacity: .65; }
+.sc-gapline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sc-today { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }

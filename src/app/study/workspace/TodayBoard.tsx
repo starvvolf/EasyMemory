@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { call, go, later } from "./api";
 import { enterProject } from "./MaterialList";
+import { TodayScenes } from "./scene/Scene";
 
 type ProblemLite = { id: string; title: string; status: "new" | "tried" | "wrong" | "solved"; lastAt: string };
 type SourceLite = { id: string; title: string; readAt: string; goals: Record<string, { done: boolean }> };
@@ -55,6 +56,8 @@ export default function TodayBoard() {
 
   return (
     <div className="td-two">
+      {/* 3번 판: 오늘 볼 상황 재현(낮은 층부터 약 10분) */}
+      <TodayScenes />
       <section className="td-card">
         <p className="eyebrow">이어서 하기</p>
         <ul className="td-cont">

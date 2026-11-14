@@ -4,7 +4,7 @@
 // hints in three steps, checks an approach before submitting and looks for a counterexample.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { call, errorText, go, handoff, later, shareContext } from "./api";
-import { ReviewAfterSolve } from "./ReviewProgress";
+import { GapList } from "./scene/Scene";
 import { setBranch } from "./shelf";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
@@ -479,8 +479,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const shownMsgs = training ? msgs.filter((m) => m.step === trainStep) : msgs;
   return (
     <div className="cs-solve" ref={solveRef}>
-      {reviewPid === id ? <ReviewAfterSolve pid={id} number={/(\d{3,6})/.exec(problem.title)?.[1]} onClose={() => setReviewPid("")}
-        onOpen={(key) => { setReviewPid(""); handoff.libraryKey = key; go("knowledge"); setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:library-open", { detail: { key } })), 80); }} /> : null}
+      {/* [경계] A 3번 판(11/15 사용자 "AI 리뷰 대신 상황 재현"): 맞힌 뒤 총정리 대신, 이 풀이에서 놓친 생각을 뽑아 바로 확인할 수 있게 */}
+      {reviewPid === id ? <div className="cs-scene"><GapList problemId={id} auto /><button className="btn ghost small" onClick={() => setReviewPid("")}>접기</button></div> : null}
       <section className="cs-statement panel">
         {/* 11/13 [경계] A: 안쪽 "← 문제 목록"은 PS 튜터 첫 화면(옛 추천 · 옛 문제)으로 가서 헷갈렸다 — 위의 "← 알고리즘 목록" 하나만 둔다 */}
         {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}
