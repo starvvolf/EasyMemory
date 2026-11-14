@@ -10,6 +10,7 @@ const eslintConfig = [
       ".next/**",
       "experiments/**",
       "out/**",
+      "tools/npc/out/**",
       "build/**",
       "tmp/**",
       "desktop/**",

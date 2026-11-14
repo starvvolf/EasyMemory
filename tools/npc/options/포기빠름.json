@@ -1,0 +1,13 @@
+{
+ "id": "포기빠름",
+ "label": "몇 번 막히면 포기",
+ "group": "성격",
+ "patch": {
+  "traits": {
+   "patience": 4
+  }
+ },
+ "conflicts": [
+  "버티기"
+ ]
+}

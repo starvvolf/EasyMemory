@@ -1,0 +1,14 @@
+{
+ "id": "큐없음",
+ "label": "큐(deque)를 모름 (2606 지도 이름)",
+ "group": "문제",
+ "patch": {
+  "knows": {
+   "items": {
+    "tool.queue": {
+     "state": "모름"
+    }
+   }
+  }
+ }
+}

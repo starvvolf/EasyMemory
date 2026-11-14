@@ -1,0 +1,11 @@
+{
+ "id": "힌트의존",
+ "label": "도움 칸 · 힌트부터 엶",
+ "group": "성격",
+ "patch": {
+  "traits": {
+   "helpRungs": 0.9,
+   "askEarly": 0.2
+  }
+ }
+}

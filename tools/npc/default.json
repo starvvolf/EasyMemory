@@ -1,0 +1,12 @@
+{
+  "id": "npc_default",
+  "seed": 7,
+  "name": "기본 학습자",
+  "lang": "python",
+  "knows": {
+    "base": { "1": "앎", "2": "앎", "3": "앎", "4": "앎", "5": "앎", "6": "앎", "run": "앎" },
+    "items": {}
+  },
+  "traits": { "invent": 0.5, "switch": 0.4, "askEarly": 0.3, "guess": 0.4, "helpRungs": 0.5, "copyTutor": 0.2, "confirm": 0.3, "patience": 20, "typo": 0.1, "terse": 0.7 },
+  "learning": { "perExplain": 0.6, "perHint": 0.3, "fromOwnFix": 0.5, "forgetPerDay": 0.03 }
+}

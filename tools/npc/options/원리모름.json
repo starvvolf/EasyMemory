@@ -1,0 +1,17 @@
+{
+ "id": "원리모름",
+ "label": "원리 조각(idea.*)을 모름 — 무늬는 items에서 바꿔 씀",
+ "group": "아는 것",
+ "patch": {
+  "knows": {
+   "items": {
+    "idea.*": {
+     "state": "모름"
+    }
+   }
+  }
+ },
+ "conflicts": [
+  "고수"
+ ]
+}

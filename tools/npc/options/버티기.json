@@ -1,0 +1,16 @@
+{
+ "id": "버티기",
+ "label": "혼자 오래 버팀",
+ "group": "성격",
+ "patch": {
+  "traits": {
+   "askEarly": 0.05,
+   "guess": 0.7,
+   "patience": 40
+  }
+ },
+ "conflicts": [
+  "바로묻기",
+  "포기빠름"
+ ]
+}

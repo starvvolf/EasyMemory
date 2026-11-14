@@ -63,3 +63,6 @@ tools/problem-authoring-lab/runs/chatgpt-request-*/
 # 루트별 실험 서버 (lab/run-lab.mjs): 빌드 폴더와 서버가 만드는 tsconfig
 /.next-lab-*/
 /tsconfig.lab-*.json
+
+# 가상 학습자(NPC) 결과 · NPC 데이터 폴더 · 중계 폴더 (tools/npc, 문제 원문 · 기록이 들어감)
+/tools/npc/out/

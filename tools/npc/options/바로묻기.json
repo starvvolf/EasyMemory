@@ -1,0 +1,14 @@
+{
+ "id": "바로묻기",
+ "label": "막히면 바로 튜터에게 물음",
+ "group": "성격",
+ "patch": {
+  "traits": {
+   "askEarly": 0.9,
+   "guess": 0.1
+  }
+ },
+ "conflicts": [
+  "버티기"
+ ]
+}
