@@ -12,9 +12,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { recordEvent, saveMany } from "@/lib/knowledge/api";
+import { COURSE, course as courseCall, offline } from "@/lib/scene/practice/course";
 
 export const runtime = "nodejs";
-const COURSE = (process.env.PROJECT_COURSE_URL || "http://127.0.0.1:4100").replace(/\/$/, "");
 const runId = z.string().regex(/^\w{4,40}$/);
 
 type SyncEvent = { key: string; kind: "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; at: string };
@@ -27,14 +27,14 @@ type SyncItem = { key: string; title: string; kind: "concept" | "principle" | "p
 type SyncPayload = { runId: string; source: { kind: "code"; title: string; ref: string }; items: SyncItem[] };
 type Status = { runs: Array<{ id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string }>; active: string | null; engine?: string; ai?: unknown };
 
+// 코스 서버 부르기는 상황 재현의 실습 갈래와 같이 쓰는 곳 하나로(11/15, src/lib/scene/practice/course.ts)
 async function course<T>(pathname: string, init?: { method?: string; body?: unknown; timeout?: number }): Promise<T> {
-  const res = await fetch(`${COURSE}/api/${pathname}`, { method: init?.method ?? "GET", cache: "no-store", signal: AbortSignal.timeout(init?.timeout ?? (init?.method === "POST" ? 20000 : 4000)),
-    headers: init?.body === undefined ? undefined : { "Content-Type": "application/json" }, body: init?.body === undefined ? undefined : JSON.stringify(init.body) });
-  const data = await res.json().catch(() => ({}));
-  // 옛 코스 서버(지식 연결 전)는 sync 주소를 모른다 → 다시 켜 달라고 말한다
-  if (res.status === 404 && pathname.endsWith("/sync")) throw Object.assign(new Error("프로젝트 코스를 껐다가 다시 켜 주세요. 새 연결 기능이 아직 안 들어가 있어요."), { status: 502 });
-  if (!res.ok) throw Object.assign(new Error((data as { error?: string; message?: string }).error ?? (data as { message?: string }).message ?? `프로젝트 코스 서버 오류 (${res.status})`), { status: 502 });
-  return data as T;
+  try { return await courseCall<T>(pathname, init); }
+  catch (error) {
+    // 옛 코스 서버(지식 연결 전)는 sync 주소를 모른다 → 다시 켜 달라고 말한다
+    if ((error as { upstream?: number }).upstream === 404 && (pathname.endsWith("/sync") || pathname.startsWith("scene/"))) throw Object.assign(new Error("프로젝트 코스를 껐다가 다시 켜 주세요. 새 연결 기능이 아직 안 들어가 있어요."), { status: 502 });
+    throw error;
+  }
 }
 // 꺼져 있으면 켜기: 같은 PC의 기본 주소일 때만, 1분에 한 번만(켜지는 데 몇 초 걸린다). PROJECT_COURSE_AUTOSTART=0이면 안 켠다.
 let startedAt = 0;
@@ -58,7 +58,6 @@ function startCourse(): { starting: boolean; error?: string } {
   }
 }
 
-const offline = (error: unknown) => error instanceof Error && (error.name === "TimeoutError" || /fetch failed|ECONNREFUSED/i.test(`${error.message} ${(error as { cause?: Error }).cause?.message ?? ""}`));
 
 /** 한 프로젝트의 안 보낸 것을 지식 저장소에 넣는다. */
 async function syncRun(id: string) {
@@ -149,6 +148,14 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "note" && m === "GET") {
       try { return NextResponse.json({ online: true, ...await course<object>(`runs/${runId.parse(p[1])}/note`) }); }
       catch (error) { if (offline(error)) return NextResponse.json({ online: false }); throw error; }
+    }
+    // 상황 재현 · 실습 장면(11/15): [편집기 열기](16 · 17) — 실습 서버가 만든 장면 폴더를 앱 안 편집기 화면(studio.html?scene=)으로. [검사 돌려 보기]는 채점 없이 출력만
+    if (p[0] === "scene" && p[1] && p.length === 3 && m === "POST" && (p[2] === "open" || p[2] === "try")) {
+      const sid = z.string().regex(/^sc_[a-f0-9]{12}$/).parse(p[1]);
+      if (p[2] === "try") return NextResponse.json(await course(`scene/${sid}/try`, { method: "POST", body: {}, timeout: 300000 }));
+      const s = await course<{ missing?: boolean; folder?: string; files?: string[] }>(`scene/${sid}`);
+      if (s.missing) return NextResponse.json({ message: "장면 폴더가 없어요. 장면을 다시 만들어 주세요." }, { status: 409 });
+      return NextResponse.json({ studio: `${COURSE}/studio.html?scene=${sid}`, folder: s.folder ?? "", files: s.files ?? [] });
     }
     if (p[0] === "sync" && p.length === 1 && m === "POST") {
       const b = z.object({ runId: runId.optional() }).parse(await boundedJson(request).catch(() => ({})));

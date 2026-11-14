@@ -7,6 +7,7 @@ import { DATA, read, update, writeAtomic } from "./store.ts";
 import { aiText, S } from "./ai.ts";
 import { REVIEW_SYSTEM, REVIEW_FORMAT, ONGOING_NOTE } from "./review-prompt.ts";
 import { applyMemory, memoryForRecord, type MemOps } from "./memory.ts";
+import { KERNEL_LANGS, kindOf, langOf as sceneLang, langOfFile } from "./scene-kinds.ts";
 
 export type GoalRecord = {
   goal: string; done: string; status: "마침" | "건너뜀"; mode: string | null; from: string; to: string;
@@ -16,7 +17,7 @@ export type GoalRecord = {
   cards?: Card[];
   learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean; card?: Card }[];
   /** 11/6 사용자 "대화 내역을 봤을 때 나한테 부족한 점이 딱 보인다. 그걸 캐치해서 지식으로 잡는 게 중요" */
-  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string }; card?: { situation: string; next: string; how: string } }[];
+  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string }; card?: { situation: string; next: string; how: string }; scene?: SceneSeed }[];
   /** 11/6 사용자 "코드 보면 이 사람 파이썬 문법 잘 모르는 것 같은데? 이런 생각. 하드코딩 말고 자유를 주면 잡을 수 있다" → 학습자 메모리(lib/memory.ts)에 반영한 것 */
   memory?: { done: string[]; dropped: string[] }; at: string;
 };
@@ -102,7 +103,22 @@ export const recordsOf = async (runId: string) => (await read<{ items: GoalRecor
 // 카드 = 상황 · 내가 한 것 · 알게 된 것 · 다음엔 · 다시 확인 · 어떻게 알게 됐나. 혼자 해낸 게 아니면(도움 · 틀렸다 고침 · 아직) 부족함 원장으로 가 다시 확인한다.
 export const HOW = ["혼자 해냄", "도움 받고 됨", "틀렸다 고침", "아직 모름"] as const;
 export type How = (typeof HOW)[number];
-export type Card = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: How; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string } };
+export type Card = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: How; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string };
+  /** 상황 재현 재료(11/15, 혼자 해냄이 아닌 카드만): 원장(gaps.ts)의 scene 칸으로 간다 */ scene?: SceneSeed };
+/** 빈틈의 종류 · 확인할 것 · 주제 · 알맹이. 알맹이 검사(돌아가나)는 원장에 합친 뒤 코드가(lib/scene-gaps.ts checkKernels) */
+export type SceneSeed = { kind: string; target: "ability" | "form"; topic: string; kernel: { lang: string; code: string; needs: string[] } };
+/** 정리 글의 카드 칸 → 상황 재현 재료. 종류를 못 맞추면 없음(그 카드는 왜인지 한 줄로만 다시 묻는다) */
+export function sceneSeed(x: Pick<RawCard, "kind" | "target" | "topic" | "kernelLang" | "kernelCode" | "needs">, file = ""): SceneSeed | undefined {
+  const kind = kindOf(x.kind ?? "");
+  if (!kind) return undefined;
+  let lang = sceneLang(x.kernelLang ?? ""), code = String(x.kernelCode ?? "").replace(/\r/g, "").trim();
+  // "- 알맹이: `lock (o) { … }`"처럼 한 줄로 쓴 경우: 언어 칸이 코드다
+  if (!code && x.kernelLang && !(KERNEL_LANGS as readonly string[]).includes(lang)) { code = x.kernelLang.trim().replace(/^`+|`+$/g, "").trim(); lang = ""; }
+  if (!(KERNEL_LANGS as readonly string[]).includes(lang)) lang = langOfFile(file) || "";
+  const target = /표현|form/i.test(x.target ?? "") ? "form" as const : "ability" as const;
+  const topic = String(x.topic ?? "").trim().toLowerCase().replace(/[^a-z0-9.\-_]/g, "").slice(0, 60);
+  return { kind, target, topic, kernel: { lang, code: code.split("\n").slice(0, 12).join("\n").slice(0, 900), needs: String(x.needs ?? "").split(/[,，]/).map((s) => s.trim()).filter(Boolean).slice(0, 6) } };
+}
 /** 11/12까지 쓰던 JSON 정리 지시(이야기 + 약점 카드). 11/13부터 제품은 review-prompt.ts(글)를 쓰고, 이것은 옛 평가(lib/evals.ts)만 쓴다 */
 export const SYSTEM_RECORD = `학습 목표 하나 동안 나눈 대화를 읽고, 학습자가 어떤 과정을 거쳐 무엇을 알게 됐고 무엇이 부족했는지 실습 기억 카드로 정리한다.
 summary: 이 목표에서 학습자가 한 일과 도달한 곳을 2~3문장으로.
@@ -244,12 +260,13 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
       if (how !== "혼자 해냄" && x.code?.save && !cc) unverified.push(`${x.name}: 코드 ${x.code.save} ${x.code.from}~${x.code.to}`);
       return { name: t(x.name, 80), situation: t(x.situation, 160), did: t(x.did, 300), quote: ok ? q : "", learned: t(x.learned, 400), next: t(x.next, 200), how, verified: ok || !!cc,
         ...(cc ? { code: cc } : {}), ids: (x.ids ?? []).map(String).filter((i) => /^G\d+-[0-9a-f]{4}$/.test(i)).slice(0, 6),
-        ...(how !== "혼자 해냄" && x.recheck?.q && x.recheck?.a ? { recheck: { q: t(x.recheck.q, 1200), a: t(x.recheck.a, 600) } } : {}) };
+        ...(how !== "혼자 해냄" && x.recheck?.q && x.recheck?.a ? { recheck: { q: t(x.recheck.q, 1200), a: t(x.recheck.a, 600) } } : {}),
+        ...(() => { const s = how !== "혼자 해냄" ? sceneSeed(x, cc?.file ?? "") : undefined; return s ? { scene: s } : {}; })() };
     });
     // 예전 꼴(learned · gaps)로도 펼친다: 앱 지식 · 원장 · 메모리 · 화면이 그대로 읽게. 칸(type)은 더 쓰지 않아 "개념"으로 둔다
     const learned = cards.map((c) => ({ type: "개념" as Tab, concept: c.name, meaning: c.learned, how: c.how, quote: c.quote, verified: c.verified, card: c }));
     const gaps = cards.filter((c) => c.how !== "혼자 해냄").map((c) => ({ type: "개념" as Tab, concept: c.name, wrong: c.did, right: c.learned, quote: c.quote, verified: c.verified, ...(c.code ? { code: c.code } : {}), ids: c.ids, ...(c.recheck ? { recheck: c.recheck } : {}),
-      card: { situation: c.situation, next: c.next, how: c.how } }));
+      card: { situation: c.situation, next: c.next, how: c.how }, ...(c.scene ? { scene: c.scene } : {}) }));
     // 메모리 갱신: 근거는 이번 정리의 부족했던 점(나아짐은 배운 것) 이름만 인정, 상태는 코드가(lib/memory.ts)
     const memory = await applyMemory(runId, goal.title, out.memory, gaps.map((g) => g.concept), learned.map((l) => l.concept));
     const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to, // 11/13: 정리를 부른 때(AI 1분 뒤가 아니라) — 늦게 찍혀 다음 목표 구간과 겹쳤다
@@ -307,7 +324,8 @@ export async function resultLine(runId: string, goal: GoalIn, to: string, messag
     edits.length ? `튜터가 고친 파일 ${edits.join(", ")}` : "", `${min}분`].filter(Boolean).join(" · ");
 }
 
-type RawCard = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: string; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string } };
+type RawCard = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: string; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string };
+  /** 상황 재현 재료(11/15): 종류 · 확인할 것 · 주제 · 알맹이(언어 · 코드 · 가정) */ kind?: string; target?: string; topic?: string; kernelLang?: string; kernelCode?: string; needs?: string };
 /** 리뷰 글 = "# 기록용" 앞, 기록용 = 요약 · 과정 · 카드 · 메모리(정해진 꼴). 코드 블록 안의 # 줄은 머리글로 보지 않는다 */
 export function parseRecordTail(text: string): { review?: ReviewMd; summary: string; steps: string[]; cards: RawCard[]; memory: MemOps } {
   const lines = String(text ?? "").replace(/\r/g, "").split("\n");
@@ -320,12 +338,22 @@ export function parseRecordTail(text: string): { review?: ReviewMd; summary: str
   const memory: MemOps = { add: [], update: [], improved: [] };
   const cards: RawCard[] = [];
   let summary = "", steps: string[] = [], sec = "";
-  const KEY: Record<string, string> = { "코드": "code", "어떻게": "how", "상황": "situation", "한 것": "did", "인용": "quote", "알게 된 것": "learned", "다음엔": "next", "다시 확인": "q", "모범답": "a", "원장": "ids" };
+  const KEY: Record<string, string> = { "코드": "code", "어떻게": "how", "상황": "situation", "한 것": "did", "인용": "quote", "알게 된 것": "learned", "다음엔": "next", "다시 확인": "q", "모범답": "a", "원장": "ids",
+    "종류": "kind", "확인할 것": "target", "주제": "topic", "알맹이": "kernelLang", "가정": "needs" };
   const clean = (v: string) => v.trim().replace(/^`(.*)`$/, "$1").trim();
   const names = (v: string) => v.split(/[,，·]/).map((x) => x.trim()).filter(Boolean);
+  // 알맹이 코드 블록(11/15): "- 알맹이: 언어" 바로 다음의 ``` 블록. 블록 안의 # · - 줄은 머리글 · 칸으로 보지 않는다
+  let inFence = false, fenceTo: RawCard | null = null, fenceLines: string[] = [], wantFence = false;
   for (const raw of tail) {
+    if (/^\s*```/.test(raw)) {
+      if (!inFence) { inFence = true; fenceTo = wantFence && sec === "card" ? cards[cards.length - 1] ?? null : null; fenceLines = []; }
+      else { inFence = false; if (fenceTo) fenceTo.kernelCode = fenceLines.join("\n").replace(/\s+$/, ""); fenceTo = null; wantFence = false; }
+      continue;
+    }
+    if (inFence) { fenceLines.push(raw.replace(/\s+$/, "")); continue; }
     const l = raw.trim();
     if (!l) continue;
+    wantFence = false;
     let m: RegExpExecArray | null;
     if ((m = /^요약\s*[:：]\s*(.*)$/.exec(l))) { summary = m[1].trim(); continue; }
     if ((m = /^과정\s*[:：]\s*(.*)$/.exec(l))) { steps = m[1].split(/\s+\/\s+/).map((x) => x.trim()).filter(Boolean); continue; }
@@ -340,6 +368,7 @@ export function parseRecordTail(text: string): { review?: ReviewMd; summary: str
       const c = cards[cards.length - 1], v = clean(kv[2]);
       const cm = k === "code" ? /^(S\d+)\s+(\d+)\s*[-~]\s*(\d+)/.exec(v) ?? /^(S\d+)\s+(\d+)/.exec(v) : null;
       if (k === "code") { if (cm) c.code = { save: cm[1], from: Number(cm[2]), to: Number(cm[3] ?? cm[2]) }; }
+      else if (k === "kernelLang") { c.kernelLang = v.replace(/```/g, "").trim(); wantFence = true; }
       else if (k === "q") c.recheck!.q = v; else if (k === "a") c.recheck!.a = v; else if (k === "ids") c.ids = names(v); else (c as Record<string, unknown>)[k] = v;
     } else if (sec === "mem") {
       const [head, ev = ""] = b.split(/\s*←\s*/);

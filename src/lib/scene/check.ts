@@ -21,7 +21,7 @@ function checkChoices(scene: Scene, problems: string[]) {
 }
 
 export async function checkScene(scene: Scene): Promise<Scene> {
-  if (PRACTICE_FORMATS.includes(scene.format)) return checkPracticeScene(scene);
+  if (PRACTICE_FORMATS.includes(scene.format) || scene.format === "why" && scene.practice) return checkPracticeScene(scene);
   const problems: string[] = [];
   switch (scene.format) {
     case "choice": {

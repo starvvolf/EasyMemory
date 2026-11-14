@@ -28,7 +28,7 @@ const SCOPE: Record<string, string> = { line: "한 줄", piece: "조각", functi
 const FORMAT: Record<Format, string> = { write: "한 줄 쓰기", blank: "빈칸 채우기", predict: "결과 맞히기", fix: "틀린 곳 고치기", choice: "고르기", order: "순서 맞추기", function: "작은 함수 쓰기",
   counter: "반례 만들기", draw: "담기 그리기", variant: "변형 문제", error: "오류 읽기", why: "왜인지 한 줄", where: "어디에 넣을까", timeline: "시간 순서 표", command: "명령 한 줄",
   project: "작은 재현 프로젝트", origin: "원래 자리로" };
-const PRACTICE: Format[] = ["where", "timeline", "command", "project", "origin"];
+const PRACTICE: Format[] = ["where", "timeline", "command", "project", "origin", "why"];
 
 /** 사다리 점: 지나온 거리는 ✓, 지금 거리는 ●, 남은 것은 ─ */
 function Ladder({ g }: { g: Pick<GapLite, "distance" | "known"> }) {
@@ -153,7 +153,7 @@ function SceneCard({ gap, scene, onDone }: { gap: GapLite; scene: SceneLite; onD
   const openVariant = () => { if (!scene.variant) return; window.dispatchEvent(new CustomEvent("recaller:go", { detail: { view: "code" } })); setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:code-open", { detail: { id: scene.variant!.problemId } })), 0); };
   const ready = f === "choice" || f === "error" ? pick !== null : f === "blank" ? fills.every((x) => x.trim()) : f === "predict" || f === "counter" || f === "draw" ? text.trim() !== ""
     : f === "order" ? order.length > 0 : PRACTICE.includes(f) ? prac.trim() !== "" : code.trim() !== "";
-  const canRun = ["write", "function", "blank", "fix", "order", "variant", "counter"].includes(f);
+  const canRun = ["write", "function", "blank", "fix", "order", "variant", "counter", "where"].includes(f);
   return <article className="sc-card">
     <header className="sc-head">
       <span className="sc-chip">{gap.kind}</span><span className="sc-chip soft">{FORMAT[f]} · {scene.mix && scene.mix.length > 1 ? "함수" : SCOPE[gap.scope] ?? gap.scope} · 약 {scene.minutes}분</span>

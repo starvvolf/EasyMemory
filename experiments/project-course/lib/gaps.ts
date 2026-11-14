@@ -20,7 +20,13 @@ export type Gap = {
   cause: string[];                                  // 학습자가 고른 막힌 이유(막힘에서만)
   evidence: { at: string; from: GapFrom | "다시 확인"; text: string }[];
   remedy: { at: string; kind: "보충" | "설명"; text: string }[];
-  code?: { file: string; from: number; to: number; code: string };
+  /** save: 그 코드를 자른 저장본 번호(S3, 11/15부터 — 원래 자리로 장면이 그 시점 파일을 되살린다) */
+  code?: { file: string; from: number; to: number; code: string; save?: string };
+  /**
+   * 상황 재현 재료(11/15, 설계 1번 "실습: 이미 구조로 남아 있는 빈틈에 종류 · 확인할 것 · 알맹이 칸을 더해요"). 목표 정리가 채우고,
+   * 알맹이 검사(check: 실제로 돌렸나 · 문법만 봤나 · 모양만 봤나 · 실패)는 lib/scene-gaps.ts checkKernels가 코드로.
+   */
+  scene?: { kind: string; target: "ability" | "form"; topic: string; kernel: { lang: string; code: string; needs: string[]; check?: KernelCheck; error?: string } };
   status: GapStatus;
   filledAt?: string; fillEvidence?: string;
   recheck?: Recheck;
@@ -34,6 +40,7 @@ export type Gap = {
   dueAt?: string; box: number;
   at: string;
 };
+export type KernelCheck = "ran" | "syntax" | "shape" | "failed" | "none";
 type Ledger = { gaps: Gap[] };
 const file = (runId: string) => path.join(DATA, "gaps", `${runId}.json`);
 const now = () => new Date().toISOString();
@@ -101,7 +108,8 @@ export async function gapsForRecord(runId: string, goalId: string, verdicts: str
   return `${vline}[이 목표 동안 Recaller가 잡은 부족함 — 정리할 때 같은 것이면 ids에 그 id를 넣는다]\n${gs.map((g) => `${g.id} (${g.evidence.map((e) => e.from).join("·")}, ${g.status}) 단위 "${g.unit.title}": ${g.wrong}${g.cause.length ? ` · 막힌 이유: ${g.cause.join(", ")} → 재확인 꼴: ${planOf(g.cause).map((p) => p.recheck).join(" / ") || "틀린 지점 그대로"}` : " · 재확인 꼴: 틀렸던 그 지점을 이름 · 값만 바꿔 다시"}${g.remedy.length ? ` · 처방: ${g.remedy.map((r) => r.text).join(" / ")}` : ""}${g.fillEvidence ? ` · 채운 근거: ${g.fillEvidence}` : ""}`).join("\n")}`;
 }
 /** 목표 정리 결과(gaps)를 원장에 합친다: ids로 이은 것은 이름 · 칸 · 바로 알 것 · 코드 · 재확인 문항을 채우고, 원장에 없던 것은 "목표 정리"로 새로 연다 */
-export async function mergeRecord(runId: string, goal: { id: string; title: string; done: string }, recGaps: { type: string; concept: string; wrong: string; right: string; quote: string; ids?: string[]; recheck?: Recheck; code?: { file: string; from: number; to: number; code: string } | null; card?: { situation: string; next: string; how: string } }[], endAt: string) {
+export async function mergeRecord(runId: string, goal: { id: string; title: string; done: string }, recGaps: { type: string; concept: string; wrong: string; right: string; quote: string; ids?: string[]; recheck?: Recheck; code?: { file: string; from: number; to: number; code: string; save?: string } | null; card?: { situation: string; next: string; how: string };
+  scene?: { kind: string; target: "ability" | "form"; topic: string; kernel: { lang: string; code: string; needs: string[] } } }[], endAt: string) {
   await update<Ledger>(file(runId), empty(), (l) => {
     for (const r of recGaps) {
       // ids로 이은 것, 없으면 같은 목표에서 같은 이름으로 이미 연 것(다시 정리할 때 같은 부족함이 새로 생기지 않게)
@@ -119,7 +127,9 @@ export async function mergeRecord(runId: string, goal: { id: string; title: stri
         // 이미 이름이 붙은 칸은 이름을 바꾸지 않는다(다시 정리해도 같은 지식 하나로)
         if (!g.type) { g.concept = clean(r.concept, 80) || g.concept; g.type = r.type || g.type; }
         if (r.wrong) g.wrong = clean(r.wrong); if (r.right) g.right = clean(r.right, 600);
-        if (r.code?.code) g.code = { file: r.code.file, from: r.code.from, to: r.code.to, code: r.code.code.slice(0, 1500) };
+        if (r.code?.code) g.code = { file: r.code.file, from: r.code.from, to: r.code.to, code: r.code.code.slice(0, 1500), ...(r.code.save ? { save: r.code.save } : {}) };
+        // 상황 재현 재료: 새로 받은 것으로(알맹이 검사는 다시 — checkKernels)
+        if (r.scene?.kind) g.scene = { kind: r.scene.kind, target: r.scene.target === "form" ? "form" : "ability", topic: r.scene.topic, kernel: { lang: r.scene.kernel.lang, code: r.scene.kernel.code, needs: r.scene.kernel.needs } };
         if (r.recheck?.q && r.recheck?.a) g.recheck = { q: clean(r.recheck.q, 1200), a: clean(r.recheck.a, 600) };
         if (r.card) g.card = { situation: clean(r.card.situation, 160), next: clean(r.card.next, 200), how: clean(r.card.how, 20) };
         // 세션 안에서 채움 확인을 못 한 것도 다시 확인 날짜는 잡는다(알려 준 데서 끝나지 않게)

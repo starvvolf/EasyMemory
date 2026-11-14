@@ -146,6 +146,8 @@ async function recordFinished(runId: string, run: { codexId?: string; chatId?: s
   // 11/12 실습 시뮬: 타임라인의 목표 정리 칸에 토큰이 0으로 찍혀서, 이 호출의 토큰을 세어 같이 남긴다
   const { out: rec, tokens } = await (await import("./ai.ts")).withTokens(() => R.recordGoal(runId, goal, mode, msgs, recordShow, undefined, saves, ledger).catch(() => null));
   if (rec && gid) await GP.mergeRecord(runId, { id: gid, title: goal.title, done: goal.done }, (rec.gaps ?? []) as never, rec.to).catch((e) => console.error("부족함 원장 합치기:", e));
+  // 상황 재현 재료(11/15): 원장에 들어간 알맹이 코드가 돌아가나 코드로 확인(AI 없음, 실패해도 정리는 그대로)
+  if (rec && gid) await (await import("./scene-gaps.ts")).checkKernels(runId, gid).catch((e) => console.error("알맹이 검사:", e));
   if (rec) { await (await import("./timeline.ts")).systemStep(runId, `목표 정리: ${goal.title}`, { learned: rec.learned.map((x) => `${x.type} · ${x.concept}`), gaps: (rec.gaps ?? []).map((x) => `${x.type} · ${x.concept}${x.code ? ` (코드 ${x.code.file} ${x.code.from}~${x.code.to}줄)` : ""}`) }, Date.now() - t0, "system", tokens); notifyLesson(runId); }
   return rec;
 }

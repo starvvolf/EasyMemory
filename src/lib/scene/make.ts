@@ -7,8 +7,9 @@ import { langOf } from "./exec.ts";
 import { defaultAsk, recordOf, type Ask, type Record_ } from "./extract.ts";
 import { formatsFor } from "./ladder.ts";
 import { makePracticeScene, practiceFormats, practiceMaterial } from "./practice/index.ts";
+import { PRACTICE_MADE } from "./practice/formats.ts";
 import { MIX_NOTE, SCENE_SCHEMA, SCENE_SYSTEM, type SceneReply } from "./prompts.ts";
-import { bankScene, newId, readAttempts, saveScene } from "./store.ts";
+import { bankScene, newId, readAttempts, readGaps, saveScene } from "./store.ts";
 import { DISTANCE_LABEL, FORMAT_LABEL, PRACTICE_FORMATS, type Format, type Gap, type Scene } from "./types.ts";
 
 /** 장면 지시문에 넣을 원래 상황(알고리즘 문제 또는 실습 목표) */
@@ -156,11 +157,18 @@ export async function makeScene(gap: Gap, opts: { ask?: Ask; rec?: Record_; mix?
   const keep = async (s: Scene | null) => { if (s?.check?.ok) { await saveScene(s); return s; } return null; };
   if (opts.mix && opts.mix.length > 1) return keep(await aiScene(gap, "function", mat, ask, 2, opts.mix));
   const hasWrong = rec ? Boolean(wrongSubOf(gap, rec)) : gap.state.distance === "same";
-  const chain = opts.formats ?? (gap.branch === "practice" ? practiceFormats(gap) : formatsFor(gap, { hasWrongSubmission: hasWrong, lang: gap.origin.lang }));
+  // 실습: 같은 주제의 다른 실습 빈틈(작은 재현 프로젝트 준비 규칙) · 이 빈틈에서 프로젝트를 이미 냈나(한 번만)
+  const pctx = gap.branch === "practice" ? {
+    siblings: (await readGaps()).filter((g) => g.branch === "practice" && g.topic === gap.topic && g.id !== gap.id),
+    projectTried: (await readAttempts()).some((a) => a.gapId === gap.id && a.format === "project"),
+  } : null;
+  const chain = opts.formats ?? (pctx ? practiceFormats(gap, pctx) : formatsFor(gap, { hasWrongSubmission: hasWrong, lang: gap.origin.lang }));
   for (const [i, f] of chain.entries()) {
     let s: Scene | null = null;
     if (gap.state.distance === "same" && rec && i === 0 && hasWrong && (f === "fix" || f === "blank")) s = f === "fix" ? await sameScene(gap, rec) : await sameLineScene(gap, rec);
-    else if (PRACTICE_FORMATS.includes(f)) s = await makePracticeScene(gap, f).catch(() => null);
+    // 실습이 맡는 형식(13~17 · 12, 잠금 한 줄 쓰기 은행). 실습의 한 줄 쓰기는 잠금이 아니면 null → 아래 AI 장면으로
+    else if (pctx && (PRACTICE_MADE.includes(f) || f === "write") && (s = await makePracticeScene(gap, f, { ask, ...pctx }).catch(() => null))) { /* 실습이 만듦 */ }
+    else if (PRACTICE_FORMATS.includes(f) || f === "why") s = null;
     else if (f === "variant") s = await variantScene(gap, mat, ask).catch(() => null);
     else s = await aiScene(gap, f, mat, ask, i === 0 ? 2 : 1);
     const kept = await keep(s);

@@ -1,8 +1,10 @@
 // 앱 안 편집기(2026-11-11 사용자 "기존 방식 남기고 한번 도입해봐"): /studio.html?run=<id>
 // 왼쪽: 그 실습 폴더를 연 VS Code(VSCodium 웹 서버판, 코스 서버가 4103에 켬) · 오른쪽: 지금 튜터 화면(?embed=1) 그대로.
 // 처음이면 편집기를 받는 안내(파일 이름 · 받는 곳 · 크기)를 먼저 보이고, 학습자가 [받기]를 눌러야 받는다.
+// 상황 재현 장면(11/15): /studio.html?scene=<sc_id> — 왼쪽은 장면 폴더(<데이터>/scenes/<id>/)를 연 편집기, 오른쪽은 과제와 [검사 돌려 보기]. 원래 실습 폴더는 안 연다.
 const q = new URLSearchParams(location.search);
 const run = (q.get("run") || "").replace(/[^\w]/g, "");
+const scene = /^sc_[a-f0-9]{12}$/.test(q.get("scene") || "") ? q.get("scene") : "";
 const $ = (s) => document.querySelector(s);
 const left = $("#left"), right = $("#right");
 const api = async (method, url, body) => {
@@ -16,7 +18,24 @@ const card = (html) => { left.innerHTML = `<div class="center"><div class="card"
 const mb = (n) => (n ? `${Math.round(n / 1048576)}MB` : "크기 확인 못 함");
 
 // 오른쪽 튜터: VS Code 탭에 띄우던 것과 같은 화면
-right.innerHTML = run ? `<iframe title="튜터" src="/?embed=1&theme=dark#/run/${run}" allow="clipboard-read; clipboard-write"></iframe>` : "";
+right.innerHTML = run && !scene ? `<iframe title="튜터" src="/?embed=1&theme=dark#/run/${run}" allow="clipboard-read; clipboard-write"></iframe>` : "";
+if (scene) {
+  document.querySelector("#mine").style.display = "none";
+  document.querySelector(".bar b").textContent = "복습 장면";
+  right.innerHTML = `<div style="padding:14px 16px;overflow:auto;height:100%;box-sizing:border-box"><h2 style="margin:0 0 8px;font-size:15px">과제</h2><div id="task" style="color:var(--mut)">불러오는 중…</div>
+    <div class="row"><button class="btn primary" id="try">검사 돌려 보기</button></div><pre id="tryout" style="white-space:pre-wrap;font-size:12px;margin-top:10px"></pre>
+    <p style="color:var(--mut);font-size:12px">다 고쳤으면 Recaller 장면 카드로 돌아가 [제출]을 눌러요.</p></div>`;
+  api("GET", `/api/scene/${scene}`).then((s) => {
+    $("#task").innerHTML = s.missing ? "<span class=\"err\">장면 폴더가 없어요.</span>" : s.kind === "project"
+      ? `<p>${esc(s.story)}</p><p><b>${esc(s.ask)}</b></p><p>파일: ${s.files.map(esc).join(", ")}<br>검사: <code>node check.mjs</code></p>`
+      : `<p>"${esc(s.goal)}"을(를) 하던 그때의 파일이에요.</p><p><b>${esc(s.file)} ${s.from}~${s.to}줄 근처를 다시 고쳐 보세요.</b></p><p>완료 조건: ${esc(s.done)}</p>`;
+  }).catch((e) => { $("#task").textContent = e.message; });
+  $("#try").onclick = async () => {
+    $("#try").disabled = true; $("#tryout").textContent = "검사 중…";
+    try { const r = await api("POST", `/api/scene/${scene}/try`, {}); $("#tryout").textContent = `${r.ok === true ? "✓ 통과" : r.ok === false ? "✗ 아직 실패" : ""}\n${r.out}`; }
+    catch (e) { $("#tryout").textContent = e.message; } finally { $("#try").disabled = false; }
+  };
+}
 
 // 가운데 줄 끌기(너비는 이 PC에 기억)
 const W = "recaller.studio.tutorWidth";
@@ -43,12 +62,12 @@ $("#mine").onclick = async () => {
 };
 
 async function open() {
-  if (!run) return card("<p class=\"err\">어느 실습인지 모르겠어요(주소에 run이 없어요).</p>");
+  if (!run && !scene) return card("<p class=\"err\">어느 실습인지 모르겠어요(주소에 run이 없어요).</p>");
   let st;
   try { st = await api("GET", "/api/editor-web"); } catch (e) { return card(`<p class="err">${esc(e.message)}</p>`); }
   if (!st.installed) return st.job && !["끝", "실패"].includes(st.job.phase) ? watch() : askInstall(st);
   try {
-    const r = await api("POST", `/api/runs/${run}/editor-web`, {});
+    const r = await api("POST", scene ? `/api/scene/${scene}/editor-web` : `/api/runs/${run}/editor-web`, {});
     $("#where").textContent = r.folder;
     left.innerHTML = `<iframe title="편집기" src="${esc(r.url)}" allow="clipboard-read; clipboard-write"></iframe>`;
   } catch (e) {

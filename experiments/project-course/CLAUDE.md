@@ -19,6 +19,17 @@
 - 코드 조각 실행·문서 `lib/tutor-tools.ts`: 권한 모드 Node(그 파일만 읽기, 하위 프로세스 막음) 4초·64MB / MDN 검색·Node 문서 JSON, 주소는 공식 문서 6곳만
 - AI: 앱과 같은 ChatGPT 로그인(`lib/ai.ts`, 앱의 `chatgpt-auth.ts`를 읽기만), 모델 `gpt-6.1-terra`(10/31, 되돌림 `RECALLER_ASSIST_MODEL`). 호출 한도는 없음(필요하면 `PC_AI_LIMIT`), 호출 수는 `.data/ai-usage.json`
 
+## 상황 재현 복습의 실습 쪽 (11/15, 설계 `docs/상황재현_설계_v2(+gpt).md`, 앱 쪽은 `src/lib/scene/practice/CLAUDE.md`)
+
+- 빈틈 재료: 목표 정리 글의 카드(`# 기록용`)에 종류 · 확인할 것 · 주제 · 알맹이(코드 블록) · 가정을 더했다(`review-prompt.ts`, 같은 호출 — AI 호출 안 늘림). `goal-record.ts parseRecordTail`(코드 블록 안 줄은 칸으로 안 읽음) · `sceneSeed` → 원장(`gaps.ts`) `scene` 칸 · 코드 위치는 저장본 번호(`code.save`)까지. 합친 뒤 `lib/scene-gaps.ts checkKernels`가 알맹이를 코드로 검사. 종류 목록은 `lib/scene-kinds.ts`(앱 `types.ts GAP_KINDS`와 같아야 함, 시험이 맞춰 봄)
+- 내보내기: `GET /api/scene/gaps`(모든 실습의 칸 + 막힌 정도 신호 · 그때 생각이 틀렸다는 증거) · `GET /api/scene/material/<run>/<gap>`(목표 · 그때 파일 앞뒤 10줄 · 그때 기록)
+- 편집기 장면 `lib/scene-folders.ts`, 폴더 `.data/scenes/<sc_id>/`(정보 `.data/scenes/<sc_id>.json`):
+  - 16 작은 재현 프로젝트 `POST /api/scene/project`: AI 1번(`PROJECT_SYSTEM`) → 파일 1~3개 · 80줄 안 · `check.mjs`(한 줄에 "통과: · 실패:", 모두 통과면 0) · 모범 고침 · 그때 생각대로 고친 것. 코드가 확인: 받은 그대로 두 번 다 같은 실패 · 모범 고침 두 번 다 통과. 떨어지면 걸린 것을 붙여 한 번 더. 채점은 학습자 폴더를 복사해 **원래 check.mjs**로 돌림(통과 · 그때 고침과 같은 실패 = 같은 실수 · 안 바꿈 = 미확정)
+  - 17 원래 자리로 `POST /api/scene/origin`: 그 칸의 저장본 시점(그때까지 파일마다 마지막 저장본)을 되살리고, 저장한 적 없는 파일은 작업 폴더에서 복사(읽기만, node_modules · bin · obj · .git 뺌). 채점은 그 목표의 검사 그대로(`judge.ts judgeApply`, 완료 조건). 그때 줄이 그대로 남고 틀림이면 같은 실수
+  - `POST /api/scene/<id>/grade` · `/try`(검사 돌려 보기, 채점 없음) · `/editor-web`(앱 안 편집기 주소), `GET /api/scene/<id>`. 화면 `web/studio.html?scene=<id>`(왼쪽 편집기 · 오른쪽 과제와 [검사 돌려 보기])
+- 12 왜인지 한 줄은 지금 다시 확인(`/api/rechecks`) 그대로
+- 시험 `test/scene.test.ts`(가짜 AI · 임시 `PC_DATA_DIR`)
+
 ## 앱과 잇는 곳
 
 - 앱의 `/api/project-course/*`(로컬 실험 모드만, `src/app/api/project-course/`)가 코스 서버를 부른다. 4100이 꺼져 있으면 앱이 `프로젝트코스 실험.cmd`를 최소화로 켠다(60초에 한 번, 로컬 4100일 때만, VS Code는 안 염, 끄기 `PROJECT_COURSE_AUTOSTART=0`. 10/31 사용자 "필요할 때 켜기", P5 대신). 화면 `src/app/study/workspace/ProjectStudy.tsx`(이어 하기·노트·새 프로젝트·지식 연결 상태)

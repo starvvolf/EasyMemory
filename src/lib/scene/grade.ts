@@ -19,9 +19,10 @@ function matches(got: string[], expected: string[], shape: string[]) {
 }
 const isMine = (id: string) => id === "mine" || id.startsWith("mine-");
 
-export async function gradeScene(scene: Scene, gap: Pick<Gap, "wrongVerified">, answer: string, opts: { gaveUp?: boolean } = {}): Promise<Graded> {
+export async function gradeScene(scene: Scene, gap: Pick<Gap, "wrongVerified"> & Partial<Pick<Gap, "origin">>, answer: string, opts: { gaveUp?: boolean } = {}): Promise<Graded> {
   if (opts.gaveUp) return { verdict: "unclear", matched: "gave-up" };
-  if (PRACTICE_FORMATS.includes(scene.format)) return gradePracticeScene(scene, gap, answer);
+  // 실습 형식(13~17)과 실습의 왜인지 한 줄(다시 확인 채점)은 실습 쪽이 채점한다
+  if (PRACTICE_FORMATS.includes(scene.format) || scene.format === "why" && scene.practice) return gradePracticeScene(scene, gap, answer);
   const c = scene.computed;
   if (!c) throw new Error("검사하지 않은 장면이에요.");
   const sameOk = gap.wrongVerified !== false;

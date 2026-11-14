@@ -5,7 +5,7 @@ import { defaultAsk, extractGaps, recordOf, type Ask } from "./extract.ts";
 import { gradeScene, type Graded } from "./grade.ts";
 import { dueToday, reflect, MINUTES, SCOPE_MIN } from "./ladder.ts";
 import { makeScene } from "./make.ts";
-import { practiceGaps, practicePublic } from "./practice/index.ts";
+import { practiceGaps, practicePublic, previewPracticeScene } from "./practice/index.ts";
 import { WHY_SCHEMA, WHY_SYSTEM } from "./prompts.ts";
 import { addAttempt, changeGaps, newId, readAttempts, readGaps, readScene, saveScene, unusedScene } from "./store.ts";
 import { PRACTICE_FORMATS, VERDICT_LABEL, type Gap, type Scene, type SceneVerdict } from "./types.ts";
@@ -23,7 +23,7 @@ export function publicScene(s: Scene) {
     choices: s.choices?.map((c) => c.text) ?? [], minutes: MINUTES[s.format],
     ...(s.view ? { view: s.view } : {}), ...(s.pieces ? { pieces: s.pieces } : {}), ...(s.errorText ? { errorText: s.errorText } : {}),
     ...(s.draw ? { drawMode: s.draw.mode } : {}), ...(s.variant ? { variant: s.variant } : {}), ...(s.structure ? { structure: s.structure.must.map((m) => m.why) } : {}),
-    ...(s.mix ? { mix: s.mix } : {}), ...(PRACTICE_FORMATS.includes(s.format) ? { practice: practicePublic(s) } : {}) };
+    ...(s.mix ? { mix: s.mix } : {}), ...(PRACTICE_FORMATS.includes(s.format) || s.practice ? { practice: practicePublic(s) } : {}) };
 }
 export const gapView = (g: Gap) => ({ id: g.id, branch: g.branch, title: g.title, kind: g.kind, layer: g.layer, target: g.target, missed: g.missed, wrong: g.wrong, scope: g.scope, dose: g.dose.level,
   distance: g.state.distance, known: g.state.known, due: g.state.due, passes: g.state.passes, sameMistakes: g.state.sameMistakes, unclear: g.state.unclear,
@@ -119,7 +119,8 @@ export async function next(gapId: string, opts: { ask?: Ask; mix?: boolean } = {
 /** 미리 실행: 보이는 입력(기본)에서만 돌려 출력을 보여 준다. 채점은 안 함. 반례 만들기는 학습자가 쓴 입력으로 두 코드를 돌리지 않고(답이 됨) 입력 검사만. */
 export async function preview(sceneId: string, answer: string) {
   const s = await readScene(sceneId);
-  if (!s || ["choice", "predict", "error", "draw"].includes(s.format) || PRACTICE_FORMATS.includes(s.format)) throw new Error("실행할 수 없는 장면이에요.");
+  if (s && (s.format === "where" || s.format === "project")) return previewPracticeScene(s, answer);
+  if (!s || ["choice", "predict", "error", "draw", "why"].includes(s.format) || PRACTICE_FORMATS.includes(s.format)) throw new Error("실행할 수 없는 장면이에요.");
   if (s.format === "counter") { const v = await validInput(s.validator, answer); return { runs: [{ input: answer, ...(v.ok ? { out: "입력 형식은 맞아요." } : { error: v.why }) }] }; }
   const shown = s.format === "fix" ? s.inputs.filter((x) => x.role === "split").slice(0, 1) : s.format === "variant" ? s.inputs.slice(0, 2) : shownInputs(s);
   const runs = await runAll(s.lang, programOf(s, answer), shown.map((x) => x.stdin));

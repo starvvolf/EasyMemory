@@ -147,7 +147,17 @@ const routes: [string, RegExp, Handler][] = [
     const r = await G.answerRecheck(m[1], m[2], String(b.answer ?? ""), (g) => G.gradeRecheck(g, String(b.answer ?? "")));
     return { verdict: r.verdict.verdict, sameMistake: r.verdict.same_mistake, note: r.verdict.note, answer: r.gap?.recheck?.a ?? "", right: r.gap?.right ?? "", status: r.gap?.status, dueAt: r.gap?.dueAt ?? null };
   }],
-  ["GET", /^\/api\/learner-note$/, async (q) => { const L = await import("../lib/learner-note.ts"); return new URL(q.url ?? "/", "http://x").searchParams.get("local") ? L.localNote() : L.learnerNote(); }],
+  // 상황 재현 복습(11/15, lib/scene-gaps.ts · lib/scene-folders.ts): 앱(src/lib/scene/practice/)이 빈틈 · 장면 재료를 받아 가고, 편집기 장면(16 · 17)의 폴더 · 채점은 여기서
+  ["GET", /^\/api\/scene\/gaps$/, async () => (await import("../lib/scene-gaps.ts")).sceneGaps()],
+  ["GET", /^\/api\/scene\/material\/(\w{4,40})\/(G\d+-[0-9a-f]{4})$/, async (_q, m) => (await import("../lib/scene-gaps.ts")).sceneMaterial(m[1], m[2])],
+  ["POST", /^\/api\/scene\/project$/, async (req) => { const b = await body(req); const g = (b.gap ?? {}) as Record<string, unknown>; const s = (k: string, n = 2000) => String(g[k] ?? "").slice(0, n);
+    return (await import("../lib/scene-folders.ts")).makeProject(String(b.sceneId ?? ""), { title: s("title", 200), kind: s("kind", 40), missed: s("missed", 600), wrong: s("wrong", 600), lang: s("lang", 20) || "javascript", topic: s("topic", 80), kernel: s("kernel"), origin: s("origin", 600) }); }],
+  ["POST", /^\/api\/scene\/origin$/, async (req) => { const b = await body(req); await getRun(String(b.runId ?? "")); return (await import("../lib/scene-folders.ts")).makeOrigin(String(b.sceneId ?? ""), { runId: String(b.runId), gapId: String(b.gapId ?? "") }); }],
+  ["GET", /^\/api\/scene\/(sc_[a-f0-9]{12})$/, async (_q, m) => (await (await import("../lib/scene-folders.ts")).scenePublic(m[1])) ?? { missing: true }],
+  ["POST", /^\/api\/scene\/(sc_[a-f0-9]{12})\/grade$/, async (req, m) => { const b = await body(req); return (await import("../lib/scene-folders.ts")).gradeScene(m[1], { wrongVerified: b.wrongVerified !== false }); }],
+  ["POST", /^\/api\/scene\/(sc_[a-f0-9]{12})\/try$/, async (_q, m) => (await import("../lib/scene-folders.ts")).tryScene(m[1])],
+  ["POST", /^\/api\/scene\/(sc_[a-f0-9]{12})\/editor-web$/, async (_q, m) => (await import("../lib/scene-folders.ts")).editorFor(m[1])],
+  ["GET", /^\/api\/learner-note$/,async (q) => { const L = await import("../lib/learner-note.ts"); return new URL(q.url ?? "/", "http://x").searchParams.get("local") ? L.localNote() : L.learnerNote(); }],
   ["GET", /^\/api\/runs\/(\w+)\/goals-brief$/, async (_q, m) => {
     await getRun(m[1]);
     const g = await (await import("../lib/goals.ts")).goalsOf(m[1]);
