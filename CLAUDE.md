@@ -86,6 +86,6 @@
 ## 폴더
 
 - `src/app/study`(화면), `src/app/api`(API), `src/lib`(기능), `desktop/`(Electron 앱), `scripts/`(켜기·끄기·데이터 동기화·데이터 보관), `experiments/project-course/`(실습 코스 서버·VS Code 확장).
-- `tools/`: 개발 도구(토큰 사용량·작업 현황, `space.mjs` 용량 보기, 데이터 보관하고 새로 시작, 에이전트 MCP).
+- `tools/`: 개발 도구(토큰 사용량·작업 현황, `space.mjs` 용량 보기, 데이터 보관하고 새로 시작, 에이전트 MCP). `tools/harness/`: ChatGPT 없이 앱을 끝까지 돌리는 자체 시험(대역 모델 중계). `tools/npc/`: 가상 학습자 실행기(`src/lib/npc/`).
 - 2026-11-05 정리로 옛 Study Forge 화면·API·도구·스크립트·`eval/`·`보관/`을 지웠다(`협업/결과보고/계획_리팩토링_A_20261105.md`). git 기록에서 되살릴 수 있다. 아직 남은 옛 이름(`mcp-*`, `study-executor`, `personalization-lab`, `tools/problem-authoring-lab`, `tools/study-forge-mcp`의 5개 파일)은 지금 공부 화면이 쓰는 것이다.
 - 2026-11-15 리팩토링(DECISIONS 같은 날): 화면에서 닿지 않는 것 · 개발판 · 옛 엔진(v2·v3·astra·문제 만들기·정리 글) · Firebase · 크롬 사이드바 확장 · `출제기준/`을 지웠다. 엔진은 줄기 → 기억 채우기 한 길(`src/lib/study/gen/CLAUDE.md`). 공부 화면은 React 틀 하나(`StudyShell.tsx`).
