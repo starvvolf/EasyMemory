@@ -6,6 +6,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { call, errorText } from "./api";
 import type { CardGroup, CardStat, MaterialStats } from "@/lib/knowledge/flash-stats";
 import { Rich as RichBlock, RichInline as Rich } from "./Rich";
+import { useMaking } from "./materials";
+import YoutubeNotes, { useYoutube } from "./youtube/YoutubeNotes";
 
 type Shape =
   | { form: "term"; name: string; symbol: string; definition: string; neighbors: string[] }
@@ -903,7 +905,11 @@ export default function MaterialMap({ genId, onPage, extra }: { genId: string; o
   // 11/6 사용자: 목차별·개념별을 빼고 위에 [요약 | 지식] 두 탭. 지식은 목차(자료의 순서)로만 보인다.
   const view = "outline" as const;
   // 11/9 사용자 "기존 목록형 탭으로 돌아가지 않게": 고른 탭을 기억하고(원문을 보고 돌아와도, 다시 열어도), 불러오는 동안 [기억] 목록으로 떨어지지 않는다.
-  type Tab = "summary" | "structure" | "knowledge" | "lecture" | "flash";
+  type Tab = "notes" | "summary" | "structure" | "knowledge" | "lecture" | "flash";
+  // 유튜브 자료(11/15): 첫 탭은 [정리](정리 패널과 같은 내용 정리), 기억 카드는 그 단원들에서.
+  const run = useMaking().runs.find((r) => r.id === genId);
+  const runLive = run ? ["queued", "running"].includes(run.status) : false;
+  const yt = useYoutube(run?.sourceId);
   const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" || t === "lecture" ? t : null; } catch { return null; } });
   // 플래시카드는 기억하지 않는다(11/13: 다음에 자료를 열면 카드 풀기부터 떠서 이상했다)
   const setTab = (t: Tab) => { setTabState(t); if (t === "flash") return; try { localStorage.setItem("recaller:map-tab", t); } catch { /* storage off */ } };
@@ -980,7 +986,8 @@ export default function MaterialMap({ genId, onPage, extra }: { genId: string; o
   const running = map ? map.status !== "done" : true;
   const cardsN = map?.counts.cards ?? 0;
   const steps: Step[] = [
-    { label: "자료 읽기", state: digest?.skeleton || cardsN || summary?.text ? "done" : "now" },
+    ...(yt ? [{ label: "내용 정리", state: (yt.notes?.status === "done" ? "done" : yt.notes?.status === "failed" ? "done" : "now") as Step["state"], note: yt.notes?.status === "failed" ? "못 씀" : yt.notes?.ms ? `${Math.round(yt.notes.ms / 1000)}초` : undefined }]
+      : [{ label: "자료 읽기", state: (digest?.skeleton || cardsN || summary?.text ? "done" : "now") as Step["state"] }]),
     ...(summary ? [{ label: "요약", state: (summary.status === "done" || summary.status === "failed" ? "done" : summary.status === "writing" ? "now" : running ? "wait" : "done") as Step["state"],
       note: summary.status === "failed" ? "못 씀" : summary.ms ? `${Math.round(summary.ms / 1000)}초` : undefined }]
       : [{ label: digest?.skeleton ? "줄기" : "목차", state: (digest?.skeleton?.status === "done" ? "done" : digest?.skeleton?.text ? "now" : running ? "now" : "done") as Step["state"],
@@ -998,14 +1005,15 @@ export default function MaterialMap({ genId, onPage, extra }: { genId: string; o
   const knowTab = !embedded || running || noFirst;
   // 공부 탭(11/13 사용자 "문제 풀기랑 푼 기록 없애. 줄기 구조 강의 3개로"): 문제 풀기 단추 없음, 대신 [플래시카드] 탭에 카드 전부.
   const practice = undefined;
-  const shownTab: Tab = (picked === "knowledge" && !knowTab ? null : picked) ?? (noFirst ? "knowledge" : "summary");
-  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ...(knowTab ? [["knowledge", "기억"] as const] : []), ...(running ? [] : [["lecture", "강의"] as const]), ...(embedded && !running ? [["flash", "플래시카드"] as const] : [])] as const).map(([k, label]) =>
+  const shownTab: Tab = (picked === "notes" && !yt ? null : picked === "knowledge" && !knowTab ? null : picked) ?? (yt ? "notes" : noFirst ? "knowledge" : "summary");
+  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([...(yt ? [["notes", "정리"] as const] : []), ["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ...(knowTab ? [["knowledge", "기억"] as const] : []), ...(running ? [] : [["lecture", "강의"] as const]), ...(embedded && !running ? [["flash", "플래시카드"] as const] : [])] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
   // 11/12 점검 11번: 다 만든 지도를 여는 몇 초 동안 "목차가 나오는 중"이 떠서 다시 만드는 것처럼 보였다 — 만드는 중일 때만 단계를 보인다.
-  if (!map && !error && digest !== undefined && !digest?.skeleton) return <div className={`mm2 mm3${embedded ? " mm3-embed" : ""}`}><div className="mm2-head"><div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>불러오는 중…</b></div>{extra}</div></div>;
+  if (!map && !error && !runLive && !yt) return <div className={`mm2 mm3${embedded ? " mm3-embed" : ""}`}><div className="mm2-head"><div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>불러오는 중…</b></div>{extra}</div></div>;
   if (!map) return <div className={`mm2 mm3${embedded ? " mm3-embed" : ""}`}><div className="mm2-head"><div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div>{extra}</div>
     <Steps steps={steps} />{tabs}
-    {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane genId={genId} digest={digest} cards={[]} making onPage={onPage} onPractice={practice} /> : <SummaryPane summary={summary} making />)
+    {shownTab === "notes" && yt ? <YoutubeNotes view={yt} />
+      : shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane genId={genId} digest={digest} cards={[]} making onPage={onPage} onPractice={practice} /> : <SummaryPane summary={summary} making />)
       : shownTab === "structure" ? <p className="small muted">기억 카드가 다 만들어지면 구조를 만들 수 있어요.</p>
       : <p className="small muted">{error || "목차 항목마다 기억을 만드는 중이에요. 다 되면 여기에 목차별로 보여요."}</p>}</div>;
   const shown = (c: Card) => !isFlowCard(c) && (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
@@ -1019,7 +1027,7 @@ export default function MaterialMap({ genId, onPage, extra }: { genId: string; o
     <div className={`mm2 mm3${shownTab === "structure" && !embedded ? " mm3-wide" : ""}${embedded ? " mm3-embed" : ""}`} role={embedded ? undefined : "dialog"} aria-label="자료 지도">
       <div className="mm2-head">
         <div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>{map.title.replace(/\.pdf$/i, "")}</b>
-          <span className="small muted"> · {map.pages}쪽 · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater || embedded ? "" : ` · 문제 ${n.questions}`}</span>
+          <span className="small muted"> · {map.pages}{yt ? "단원" : "쪽"} · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater || embedded ? "" : ` · 문제 ${n.questions}`}</span>
           {making ? <span className="small mm3-making"> · {map.questionsLater ? (n.cards ? "기억 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "기억 정리 중" : "자료 읽는 중"}…</span> : null}</div>
         <span className="row small">
           {extra}
@@ -1027,7 +1035,8 @@ export default function MaterialMap({ genId, onPage, extra }: { genId: string; o
       </div>
       {making ? <Steps steps={steps} /> : null}
       {tabs}
-      {shownTab === "flash" ? <FlashCards genId={genId} title={map.title} cards={map.sections.flatMap((x) => x.cards).filter((c) => !isFlowCard(c))} onPage={onPage} onClose={() => { setTab("summary"); setReload((k) => k + 1); }} />
+      {shownTab === "notes" && yt ? <YoutubeNotes view={yt} />
+      : shownTab === "flash" ? <FlashCards genId={genId} title={map.title} cards={map.sections.flatMap((x) => x.cards).filter((c) => !isFlowCard(c))} onPage={onPage} onClose={() => { setTab("summary"); setReload((k) => k + 1); }} />
       : shownTab === "summary" ? (hasOutline || !summary ? <StemPane genId={genId} digest={digest} cards={map.sections.flatMap((x) => x.cards)} making={making} onPage={onPage} onPractice={practice} />
         : <SummaryPane summary={summary} making={making} />)
       : shownTab === "structure" ? <StructurePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} chains={map.chains} making={making} onPage={onPage} onPractice={practice} />

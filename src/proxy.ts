@@ -7,7 +7,9 @@ export function proxy(request: NextRequest) {
   if (!isLocalExperimentRequest(request)) {
     return NextResponse.json({ message: "Recaller는 내 PC(127.0.0.1)에서만 쓸 수 있어요." }, { status: 403 });
   }
-  if (!isSameOriginExperimentMutation(request)) {
+  // 유튜브 정리 패널(youtube.com 위의 Tampermonkey)이 보내는 것: 사용자 지정 머리글이 있어야 한다(웹 페이지는 CORS 사전 요청 없이 못 붙인다).
+  const panel = request.nextUrl.pathname === "/api/youtube" && request.method === "POST" && request.headers.get("x-recaller-client") === "youtube-panel";
+  if (!panel && !isSameOriginExperimentMutation(request)) {
     return NextResponse.json({ message: "같은 출처의 요청만 허용합니다." }, { status: 403 });
   }
   return NextResponse.next();

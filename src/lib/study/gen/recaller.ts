@@ -12,6 +12,7 @@ import { imageSize } from "./image-size.ts";
 import { addMore, fillGroups, memoryCardQA, missingPages, parsePlan, settlePlan, STEM_FILL_QA, STEM_MORE_LINES, STEM_PLAN_LINES, stemFakeReply, stemFillQASchema, type StemRole } from "./stem.ts";
 import { cleanFigure, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import { RunawayReply } from "./json-reply.ts";
+import { notesFakeReply as youtubeFake } from "../../youtube/ingest.ts";
 import { pageText, type PrepResult, type PrepRoute, type PrepRouter } from "./prep.ts";
 import type { GenStep, GenState, Issue, ObjectiveKind } from "./types.ts";
 import { digestFakeReply, digestOverlaps, fallbackTopics, OBJECTIVES_MEMORIES, OBJECTIVES_SYSTEM, objectivesUser, oneUser, parseObjectives, SOURCE_EN, sourceLanguage,
@@ -298,5 +299,6 @@ export async function runRecaller(ctx: RecallerContext) {
 
 /** 가짜 모델(테스트): 줄기 계획 · 기억 채우기 · 학습 목표 */
 export function recallerFakeReply(step: GenStep, user: string): string {
+  if (step === "yt-notes") return youtubeFake(user);
   return stemFakeReply(step, user) ?? digestFakeReply(step, user) ?? "";
 }

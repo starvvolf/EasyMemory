@@ -210,7 +210,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const cap = input.lab?.callCap ?? Math.max(60, input.pageNumbers.length * 8 + 40);
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null,
-    extra: { images?: ModelRequest["images"]; page?: number; maxChars?: number; cacheKey?: string } = {}) => {
+    extra: { images?: ModelRequest["images"]; page?: number; maxChars?: number; cacheKey?: string; onPartial?: (text: string) => void } = {}) => {
     if (failure) throw failure;
     if (callsThisStart >= cap) throw fail(new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${cap})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`));
     if (input.provider === "fake" && process.env.NODE_ENV === "production") throw new Stop("failed", "가짜 모델은 개발 환경에서만 쓸 수 있어요.");
@@ -233,9 +233,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     let partial = "", runaway = false;
     const guardText = (text: string) => {
       partial = text;
-      if (cut && !runaway && (text.length > extra.maxChars! || /\s{1500}$/.test(text) || repeating(text))) { runaway = true; cut.abort(); }
+      if (cut && !runaway && (text.length > extra.maxChars! || /\s{1500}$/.test(text) || repeating(text))) { runaway = true; cut.abort(); return; }
+      extra.onPartial?.(text);
     };
-    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(cut ? { onText: guardText } : {}), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
+    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(cut || extra.onPartial ? { onText: guardText } : {}), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.cacheKey ? { cacheKey: extra.cacheKey } : {}) };
     request.signal = abort.signal;
     request.onProgress = (receivedChars) => {
@@ -248,7 +249,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     try {
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => recallerFakeReply(s, u)))(step, user, attempt);
       // 가짜 모델은 흘려 보내지 않으니 조각으로 넘겨, 끊기 검사가 진짜처럼 돈다.
-      if (request.fakeReply !== undefined && cut) for (let at = 200; at < request.fakeReply.length + 200 && !runaway; at += 200) guardText(request.fakeReply.slice(0, at));
+      if (request.fakeReply !== undefined && (cut || extra.onPartial)) for (let at = 200; at < request.fakeReply.length + 200 && !runaway; at += 200) guardText(request.fakeReply.slice(0, at));
       if (runaway) throw new Error("cut");
       let reply: Awaited<ReturnType<typeof callModel>>;
       for (let retry = 0; ; retry++) {
@@ -300,6 +301,12 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     mark("start", { note: state.phase });
     await saveState(state);
     const pdf = await (options.pdf ?? registeredPdfBytes)(input).catch(() => null);
+    // 글 자료(txt_): 쪽 글이 아직 없으면(유튜브는 자막 → 내용 정리) 먼저 만든다. 쪽 수는 그때 정해진다.
+    if (!pdf && !options.pages && !state.recaller?.prep && input.sourceId.startsWith("txt_")) {
+      const { readyTextSource } = await import("../text-sources.ts");
+      const pages = await readyTextSource(input.sourceId, (step, system, user, onPartial) => ask(step, null, 1, system, user, null, { onPartial }).then(String));
+      if (pages.length) { input.pageNumbers = pages; await saveState(state); }
+    }
     let outlined = state.sections.length > 0;
     // 빠른 전처리: 전처리가 그려 둔 쪽 그림과 그림 영역(이 실행에서만).
     const drawn = new Map<number, string>(), drawnFigures = new Map<number, number[][]>();

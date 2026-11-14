@@ -1,0 +1,107 @@
+--- /tmp/claude-0/-home-claude/fbbbcd0b-59ab-546a-ba47-cba852f6abbc/scratchpad/yt/youtube-summary-panel/youtube-summary.user.js	2026-11-15 02:20:22.621343659 +0900
++++ /tmp/claude-0/-home-claude/fbbbcd0b-59ab-546a-ba47-cba852f6abbc/scratchpad/yt-out/youtube-summary.user.js	2026-11-15 02:52:34.905693356 +0900
+@@ -1,7 +1,7 @@
+ // ==UserScript==
+ // @name         유튜브 정리 패널 (GPT)
+ // @namespace    keonhee.yt-summary
+-// @version      1.7.0
++// @version      1.8.0
+ // @description  유튜브 영상 옆에 교과서처럼 편집된 정리를 띄우고, 마음에 들면 노션에 저장합니다.
+ // @match        https://www.youtube.com/*
+ // @grant        GM_xmlhttpRequest
+@@ -15,6 +15,8 @@
+ // @connect      auth.openai.com
+ // @connect      api.notion.com
+ // @connect      generativelanguage.googleapis.com
++// @connect      127.0.0.1
++// @connect      localhost
+ // @run-at       document-idle
+ // @noframes
+ // ==/UserScript==
+@@ -49,6 +51,7 @@
+     notionDb: DEFAULT_NOTION_DB,
+     autoRun: false,
+     fxRate: 1350,
++    recallerUrl: 'http://127.0.0.1:3000',   // 1.8.0: 「→ Recaller」가 보내는 곳 (내 PC의 Recaller)
+   };
+   const CALLOUTS = {
+     '핵심': { icon: '💡', color: 'yellow_background' },
+@@ -852,6 +855,47 @@
+   }
+ 
+   /* ============================================================
++   * 4-1. Recaller로 보내기 (1.8.0)
++   *   지금 영상의 자막(+ 이 패널에서 이미 정리했으면 그 정리)을 내 PC의 Recaller(POST /api/youtube)로 보낸다.
++   *   정리가 있으면 Recaller는 그 정리를 그대로 쓰고, 없으면 같은 지시문으로 정리부터 쓴 뒤 기억 카드를 만든다.
++   * ============================================================ */
++  let sendingRecaller = false;
++  async function sendToRecaller() {
++    const vid = currentVideoId();
++    if (!vid) { setStatus('유튜브 영상 화면에서 눌러 주세요.', 'err'); return; }
++    if (sendingRecaller) return;
++    sendingRecaller = true;
++    const btn = $('[data-act="recaller"]');
++    if (btn) btn.disabled = true;
++    try {
++      const info = getVideoInfo(vid);
++      const entry = (S.vid === vid && S.entry) || cacheGet(vid);
++      const notes = entry && entry.md && !entry.incomplete ? entry.md : '';
++      setStatus(notes ? '정리와 자막을 Recaller로 보내는 중…' : '자막을 읽어 Recaller로 보내는 중…', 'busy');
++      let transcript = '';
++      try { transcript = compactTranscript(await getTranscript(vid)); }
++      catch (e) { if (!notes) throw e; }
++      const base = (getCfg().recallerUrl || 'http://127.0.0.1:3000').replace(/\/+$/, '');
++      const r = await gmRequest({ method: 'POST', url: base + '/api/youtube',
++        headers: { 'Content-Type': 'application/json', 'X-Recaller-Client': 'youtube-panel' },
++        data: JSON.stringify({ url: info.url, title: info.title, channel: info.channel, duration: info.duration, description: info.description, transcript, notes }) });
++      if (r.status < 200 || r.status >= 300) throw new UserError(r.status === 403 ? 'Recaller가 이 요청을 받지 않았어요. Recaller 앱을 켠 PC에서 눌러 주세요.' : (r.json?.message || `Recaller 오류 (HTTP ${r.status})`));
++      const open = r.json?.open || base + '/study';
++      const st = $('.ys-status');
++      if (st) {
++        st.className = 'ys-status on';
++        setHTML(st, `<span>${esc(r.json?.again ? '이미 보낸 영상이에요.' : notes ? 'Recaller로 보냈어요. 이 정리로 기억 카드를 만들어요.' : 'Recaller로 보냈어요. 내용 정리 → 기억 카드를 만들어요.')}</span> <a href="${esc(open)}" target="_blank" rel="noopener" style="margin-left:6px;color:var(--accent)">Recaller에서 보기 ↗</a>`);
++      }
++    } catch (e) {
++      const msg = e instanceof UserError ? e.message : (e && e.message) || String(e);
++      setStatus(/네트워크/.test(msg) ? 'Recaller에 닿지 않아요. 이 PC에서 Recaller 앱이 켜져 있는지 확인해 주세요.' : msg, 'err');
++    } finally {
++      sendingRecaller = false;
++      if (btn) btn.disabled = false;
++    }
++  }
++
++  /* ============================================================
+    * 5. ChatGPT 로그인 (Sign in with ChatGPT, 오픈소스·로컬 앱 경로)
+    * ============================================================ */
+   const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+@@ -1391,6 +1435,7 @@
+         <div class="ys-title">📘 정리</div>
+         <button class="ys-primary" data-act="run">정리하기</button>
+         <button data-act="notion" disabled title="노션에 저장">노션 저장</button>
++        <button data-act="recaller" title="Recaller로 보내기 (Alt+R): 이 영상의 내용 정리와 기억 카드를 Recaller가 만들어요">→ Recaller</button>
+         <button class="ys-icon" data-act="copy" disabled title="마크다운으로 복사">⧉</button>
+         <button class="ys-icon" data-act="toggle" title="접기/펼치기">▾</button>
+         <button class="ys-icon" data-act="big" title="크게 보기">⛶</button>
+@@ -1934,6 +1979,7 @@
+     if (act === 'run') run(!!S.entry);
+     else if (act === 'toggle') { panel.classList.toggle('ys-collapsed'); btn.textContent = panel.classList.contains('ys-collapsed') ? '▸' : '▾'; }
+     else if (act === 'big') openBig();
++    else if (act === 'recaller') sendToRecaller();
+     else if (act === 'log') openLog();
+     else if (act === 'settings') {
+       try { openSettings(); }
+@@ -2219,6 +2265,14 @@
+     if (e.key === 'Escape' && (big || logWin)) { e.preventDefault(); e.stopPropagation(); if (big) closeBig(); else closeLog(); }
+   }, true);
+   document.addEventListener('keydown', (e) => {
++    if (!e.altKey || e.ctrlKey || e.metaKey || e.code !== 'KeyR') return;
++    const t = e.target;
++    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
++    if (!currentVideoId()) return;
++    e.preventDefault(); e.stopPropagation();
++    sendToRecaller();
++  }, true);
++  document.addEventListener('keydown', (e) => {
+     if (!e.altKey || e.ctrlKey || e.metaKey || e.code !== 'KeyS') return;
+     const t = e.target;
+     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;

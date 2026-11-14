@@ -3,9 +3,9 @@
 import { call } from "./api";
 import type { MaterialRow } from "./KnowledgeBits";
 
-export type ShelfRow = MaterialRow & { pages?: number };
+export type ShelfRow = MaterialRow & { pages?: number; video?: boolean };
 export type ShelfEntry = { key: string; branch: "material"; icon: string; title: string; sub: string; lastAt: string; itemIds: string[]; row: ShelfRow; pages?: number; older?: ShelfEntry[] };
-type GenRun = { id: string; createdAt: string; status: string; fileName: string; pages: number[]; sectionCount?: number };
+type GenRun = { id: string; createdAt: string; status: string; fileName: string; pages: number[]; sectionCount?: number; sourceId?: string };
 
 /** 기억 탭이 쓰던 그대로: PDF는 실제로 만든 자료(study-gen, 다 됐거나 기억까지 된 것), 기억은 같은 자료 줄(genId)에서. 나머지 갈래 줄은 그대로. */
 export async function loadShelfRows(): Promise<MaterialRow[]> {
@@ -15,7 +15,7 @@ export async function loadShelfRows(): Promise<MaterialRow[]> {
   const pdfs: ShelfRow[] = g.runs.filter((r) => r.status === "done" || r.status === "cards").map((r) => {
     const same = pdfRows.find((x) => x.genId === r.id);
     return { key: `gen:${r.id}`, group: "material", kind: "pdf", title: r.fileName.replace(/\.pdf$/i, ""), items: same?.items ?? r.sectionCount ?? 0, itemIds: same?.itemIds ?? [],
-      lastAt: same?.lastAt && same.lastAt > r.createdAt ? same.lastAt : r.createdAt, keys: same?.keys ?? [], folderId: null, genId: r.id, pages: r.pages.length };
+      lastAt: same?.lastAt && same.lastAt > r.createdAt ? same.lastAt : r.createdAt, keys: same?.keys ?? [], folderId: null, genId: r.id, pages: r.pages.length, ...(r.sourceId?.startsWith("txt_") ? { video: true } : {}) };
   });
   return [...pdfs, ...v.materials.filter((r) => !(r.group === "material" && r.kind === "pdf"))];
 }
@@ -25,7 +25,7 @@ export function materialEntries(rows: MaterialRow[]): ShelfEntry[] {
   const all: ShelfEntry[] = rows.filter((r) => r.group === "material").map((r) => {
     const pages = (r as ShelfRow).pages;
     return { key: r.key, branch: "material", row: r as ShelfRow, itemIds: r.itemIds, lastAt: r.lastAt, title: r.title, pages,
-      icon: r.kind === "web" ? "🌐" : "📄", sub: r.key.startsWith("gen:") ? `${pages ?? "?"}쪽` : `기억 ${r.items}` };
+      icon: (r as ShelfRow).video ? "▶" : r.kind === "web" ? "🌐" : "📄", sub: r.key.startsWith("gen:") ? `${pages ?? "?"}${(r as ShelfRow).video ? "단원 · 유튜브" : "쪽"}` : `기억 ${r.items}` };
   });
   const latest = new Map<string, ShelfEntry>();
   for (const e of all.sort((a, b) => b.lastAt.localeCompare(a.lastAt))) {

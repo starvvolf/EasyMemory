@@ -5,7 +5,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export type TextSource = { id: string; title: string; kind: "youtube" | "text"; url?: string; createdAt: string; pages: Record<string, string> };
+export type TextSource = { id: string; title: string; kind: "youtube" | "text"; url?: string; createdAt: string; pages: Record<string, string>;
+  /** 유튜브(src/lib/youtube): 영상 정보 · 자막(패널의 [분:초] 줄) · 내용 정리. 정리가 끝나면 그 단원들이 쪽(pages)이 된다. */
+  video?: { id: string; channel?: string; duration?: string; description?: string };
+  transcript?: string;
+  notes?: { status: "waiting" | "writing" | "done" | "failed"; text: string; from: "recaller" | "panel"; startedAt?: string; ms?: number; error?: string } };
+/** 글 자료를 쓰기 전에 필요한 AI 한 번(유튜브 내용 정리). runner의 호출 기록 · 상한 · 멈춤을 그대로 탄다. */
+export type SourceAsk = (step: "yt-notes", system: string, user: string, onPartial?: (text: string) => void) => Promise<string>;
 export const textSourceId = /^txt_[a-f0-9]{64}$/;
 const root = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "text-sources");
 const fileOf = (id: string) => { if (!textSourceId.test(id)) throw new Error("글 자료 id가 올바르지 않아요."); return path.join(root(), `${id}.json`); };
@@ -36,11 +42,14 @@ export async function saveTextSource(input: { title: string; kind: TextSource["k
   if (found) return found;
   const source: TextSource = { id, title: input.title.trim().slice(0, 200) || "글 자료", kind: input.kind, ...(input.url ? { url: input.url } : {}), createdAt: new Date().toISOString(),
     pages: Object.fromEntries(pages.map((p, i) => [String(i + 1), p])) };
-  await mkdir(root(), { recursive: true });
-  const tmp = `${fileOf(id)}.${process.pid}.tmp`;
-  await writeFile(tmp, JSON.stringify(source, null, 2), { mode: 0o600 });
-  await rename(tmp, fileOf(id));
+  await writeTextSource(source);
   return source;
+}
+export async function writeTextSource(source: TextSource) {
+  await mkdir(root(), { recursive: true });
+  const tmp = `${fileOf(source.id)}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmp, JSON.stringify(source, null, 2), { mode: 0o600 });
+  await rename(tmp, fileOf(source.id));
 }
 async function readTextSourceFile(id: string): Promise<TextSource | null> {
   try { return JSON.parse(await readFile(fileOf(id), "utf8")) as TextSource; } catch { return null; }
@@ -50,4 +59,15 @@ export const getTextSource = (id: string) => textSourceId.test(id) ? readTextSou
 export async function readTextSource(id: string): Promise<Map<number, string> | null> {
   const source = await getTextSource(id);
   return source ? new Map(Object.entries(source.pages).map(([k, v]) => [Number(k), v])) : null;
+}
+
+/** 엔진이 쪽 글을 읽기 전: 쪽이 아직 없는 자료(유튜브 자막만 온 것)는 내용 정리부터. 돌려주는 값은 쪽 번호들. */
+export async function readyTextSource(id: string, ask: SourceAsk): Promise<number[]> {
+  let source = await getTextSource(id);
+  if (!source) return [];
+  if (source.kind === "youtube" && source.notes?.status !== "done") {
+    const { writeNotes } = await import("../youtube/ingest.ts");
+    source = await writeNotes(source, ask);
+  }
+  return Object.keys(source.pages).map(Number).sort((a, b) => a - b);
 }

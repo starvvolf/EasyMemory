@@ -12,7 +12,7 @@ import MaterialList from "./workspace/MaterialList";
 import NewMaterial from "./workspace/NewMaterial";
 import SourcePeek, { loadPdfjs, openPeek } from "./workspace/SourcePeek";
 import { setBranch, shelfSel } from "./workspace/shelf";
-import { startMaterial } from "./workspace/materials";
+import { refreshMaterials, startMaterial } from "./workspace/materials";
 
 const TodayBoard = lazy(() => import("./workspace/TodayBoard"));
 const Library = lazy(() => import("./workspace/Library"));
@@ -119,6 +119,18 @@ export default function StudyShell() {
 
   // 남겨 둔 화면이 다시 보일 때 알린다(Library · TodayBoard가 듣고 다시 불러옴)
   useEffect(() => { window.dispatchEvent(new CustomEvent("recaller:shown", { detail: view })); document.querySelector(".dejipgi")?.setAttribute("data-view", view); }, [view]);
+
+  // 유튜브 정리 패널에서 보낸 자료로 바로 (?gen=gen_…, 11/15)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const gen = params.get("gen");
+    if (!gen || !/^gen_[a-f0-9]{32}$/.test(gen)) return;
+    params.delete("gen");
+    history.replaceState(null, "", location.pathname + (params.toString() ? `?${params}` : "") + location.hash);
+    void refreshMaterials();
+    // 듣는 쪽(위의 recaller:map-open)은 앞 효과에서 이미 붙었다. 바로 보낸다(개발 모드의 두 번 실행에도 한 번만: 주소에서 이미 뺐다).
+    window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: gen } }));
+  }, []);
 
   // ChatGPT 로그인에서 돌아왔을 때 (?chatgpt=connected)
   useEffect(() => {
