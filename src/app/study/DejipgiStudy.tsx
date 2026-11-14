@@ -17,7 +17,6 @@ import { coachCards, type CoachInput } from "@/lib/study/coach";
 import { buildLexicon, chunkAt, findTerms, importantTerms } from "@/lib/study/chunk";
 import { applyPatches, similarObjectives, termChoice, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
 import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday, renderMemoryAuto, type PlanNote, type PlanRecord, type StudyRules } from "@/lib/study/plan";
-import SpeedCheck from "./workspace/SpeedCheck";
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
 import "./workspace/workspace.css";
@@ -543,7 +542,6 @@ export default function DejipgiStudy() {
         <main id="app"></main>
       </div>
       {session.mode === "local-experiment" ? <AgentScreen /> : null}
-      {session.mode === "local-experiment" ? <SpeedCheck /> : null}
     </div>
   );
 }
