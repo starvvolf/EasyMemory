@@ -70,7 +70,8 @@ export function formatOf(gap: Pick<Gap, "kind" | "scope" | "target" | "state" | 
   }
 }
 /** 하루 분량(설계 4번): 오늘 볼 빈틈, 낮은 층부터. 장면 하나 약 1~4분, 기본 10분까지. */
-export const MINUTES: Record<Format, number> = { choice: 1, predict: 1, blank: 2, write: 3, fix: 4 };
+export const MINUTES: Record<Format, number> = { write: 1, blank: 2, predict: 1, fix: 3, choice: 1, order: 2, function: 7, counter: 2, draw: 2, variant: 15, error: 1, why: 1,
+  where: 2, timeline: 2, command: 1, project: 15, origin: 10 };
 export function dueToday(gaps: Gap[], now = Date.now(), budget = 10) {
   const due = gaps.filter((g) => !g.state.known && Date.parse(g.state.due) <= now).sort((a, b) => a.layer - b.layer || Date.parse(a.state.due) - Date.parse(b.state.due));
   const out: Gap[] = []; let used = 0;

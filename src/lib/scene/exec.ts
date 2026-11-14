@@ -17,11 +17,14 @@ export function fillBlanks(template: string, answer: string) {
 /** 학습자 자리(answer)를 넣은 프로그램 전체 */
 export function programOf(scene: Pick<Scene, "format" | "setup" | "after" | "template" | "reference">, answer: string) {
   switch (scene.format) {
-    case "write": return `${scene.setup}\n${answer}\n${scene.after}`;
+    // 학습자가 코드를 쓰는 형식: 준비 코드 + 학습자 자리 + 뒤 코드(순서 맞추기는 화면이 맞춘 줄을 이어 보냄)
+    case "write": case "function": case "order": return `${scene.setup}\n${answer}\n${scene.after}`;
     case "blank": return `${scene.setup}\n${fillBlanks(scene.template ?? "", answer)}\n${scene.after}`;
-    case "fix": return answer;
-    case "predict": return scene.reference;
-    case "choice": return "";
+    // 전체 프로그램을 내는 형식
+    case "fix": case "variant": return answer;
+    // 보여 주는 코드 그대로(학습자는 값 · 보기 · 입력을 냄)
+    case "predict": case "error": case "counter": case "draw": return scene.reference;
+    default: return "";
   }
 }
 /** 실행 결과의 "모양": 출력이면 출력, 오류면 종류(파이썬은 예외 이름까지). 같은 실수를 오류로도 알아보려고. */

@@ -16,7 +16,7 @@ export type ModelRequest = {
   model?: string;
   effort?: string;
   caller: ModelCaller;
-  provider?: "chatgpt" | "codex" | "fake";
+  provider?: "chatgpt" | "codex" | "fake" | "relay";
   fakeReply?: string;
   signal?: AbortSignal;
   /** Page images sent with the user text (data URLs). Only the ChatGPT route sends them; others refuse. */
@@ -59,7 +59,7 @@ export class ModelError extends Error {
 export type ModelStatus = { ready: boolean; message: string; account?: { email?: string; plan?: string } };
 
 export interface ModelBackend {
-  readonly name: "chatgpt" | "codex" | "fake";
+  readonly name: "chatgpt" | "codex" | "fake" | "relay";
   status(caller: ModelCaller): Promise<ModelStatus>;
   call(request: ModelRequest): Promise<Omit<ModelResult, "data">>;
 }
@@ -140,7 +140,47 @@ const fakeBackend: ModelBackend = {
   },
 };
 
-const backends = { chatgpt: chatgptBackend, codex: codexBackend, fake: fakeBackend } as const;
+// 중계(relay, 11/15 자체 시험 하네스): 요청을 파일로 내놓고 응답 파일을 기다린다. 다른 에이전트(대역 모델, tools/harness/)가
+// 같은 지시문 · 스키마로 답을 써 넣는다. 개발 · 시험 전용(STUDY_FORGE_MODEL_PROVIDER=relay, STUDY_FORGE_RELAY_DIR).
+const relayBackend: ModelBackend = {
+  name: "relay",
+  async status() {
+    return process.env.STUDY_FORGE_RELAY_DIR ? { ready: true, message: "중계 모델(시험용)로 불러요." } : { ready: false, message: "STUDY_FORGE_RELAY_DIR가 없어요." };
+  },
+  async call(request) {
+    const dir = process.env.STUDY_FORGE_RELAY_DIR?.trim();
+    if (!dir) throw new ModelError("not_configured", "STUDY_FORGE_RELAY_DIR가 없어요.");
+    const { mkdir, writeFile, readFile, rename, unlink } = await import("node:fs/promises");
+    const path = (await import("node:path")).default;
+    const { randomBytes } = await import("node:crypto");
+    await mkdir(dir, { recursive: true });
+    const id = `${Date.now()}-${request.purpose.replace(/\W+/g, "_").slice(0, 30)}-${randomBytes(3).toString("hex")}`;
+    const req = path.join(dir, `req-${id}.json`);
+    const tmp = `${req}.tmp`;
+    await writeFile(tmp, JSON.stringify({ id, purpose: request.purpose, model: request.model ?? "", effort: request.effort ?? "", json: Boolean(request.json || request.schema),
+      system: request.system, user: request.user, ...(request.tail ? { tail: request.tail } : {}), ...(request.schema ? { schema: request.schema } : {}) }, null, 1), "utf8");
+    await rename(tmp, req);
+    const res = path.join(dir, `res-${id}.json`);
+    const limit = Date.now() + Number(process.env.STUDY_FORGE_RELAY_TIMEOUT_MS || 900_000);
+    while (Date.now() < limit) {
+      if (request.signal?.aborted) throw new ModelError("transient", "호출을 멈췄어요.");
+      const text = await readFile(res, "utf8").catch(() => null);
+      if (text !== null) {
+        await unlink(req).catch(() => undefined);
+        let body: { text?: unknown; error?: string };
+        try { body = JSON.parse(text) as { text?: unknown; error?: string }; } catch { body = { text }; }
+        if (body.error) throw new ModelError("transient", String(body.error));
+        const out = typeof body.text === "string" ? body.text : JSON.stringify(body.text ?? body);
+        request.onText?.(out);
+        return { text: out, model: `relay:${request.model ?? ""}` };
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    throw new ModelError("transient", "중계 모델이 시간 안에 답하지 않았어요.");
+  },
+};
+
+const backends = { chatgpt: chatgptBackend, codex: codexBackend, fake: fakeBackend, relay: relayBackend } as const;
 
 export function modelBackend(provider?: ModelRequest["provider"]): ModelBackend {
   const name = (provider ?? process.env.STUDY_FORGE_MODEL_PROVIDER ?? "chatgpt").trim() as keyof typeof backends;
