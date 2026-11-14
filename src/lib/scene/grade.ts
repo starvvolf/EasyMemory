@@ -57,7 +57,7 @@ async function gradeRun(scene: Scene, sameOk: boolean, answer: string): Promise<
   if (diffAt < 0) {
     // 표현 확인: 출력은 맞았지만 그 표현을 쓰지 않음 → 이번엔 그 표현을 확인하는 장면이라 통과로 치지 않는다
     const st = structureOk(scene.structure, answer);
-    if (!st.ok) return { verdict: "unclear", matched: "structure", outputs: got, note: `답은 맞아요. 이번에는 ${scene.structure!.must.map((m) => m.why).join(" · ")}을(를) 써서 해 보세요.` };
+    if (!st.ok) return { verdict: "unclear", matched: "structure", outputs: got, note: `답은 맞아요. 이번 장면은 표현을 확인해요 — ${scene.structure!.must.map((m) => m.why).join(" · ")}` };
     return { verdict: "pass", outputs: got };
   }
   // 오류도 모양: 그때 생각과 같은 예외(예: 숫자를 for에 넣어 TypeError)면 같은 실수. 그 밖의 오류는 원인 미확정.

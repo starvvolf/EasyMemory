@@ -58,3 +58,5 @@ pre.bad, .sc-err { color: var(--bad); }
 .sc-why { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .sc-whywrap summary { cursor: pointer; }
 .sc-todays { display: flex; flex-direction: column; gap: 6px; }
+.sc-order code { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+.sc-order li > button { flex: 0 0 auto; }

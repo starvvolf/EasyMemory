@@ -156,7 +156,7 @@ function SceneCard({ gap, scene, onDone }: { gap: GapLite; scene: SceneLite; onD
   const canRun = ["write", "function", "blank", "fix", "order", "variant", "counter"].includes(f);
   return <article className="sc-card">
     <header className="sc-head">
-      <span className="sc-chip">{gap.kind}</span><span className="sc-chip soft">{FORMAT[f]} · {SCOPE[gap.scope] ?? gap.scope} · 약 {scene.minutes}분</span>
+      <span className="sc-chip">{gap.kind}</span><span className="sc-chip soft">{FORMAT[f]} · {scene.mix && scene.mix.length > 1 ? "함수" : SCOPE[gap.scope] ?? gap.scope} · 약 {scene.minutes}분</span>
       {scene.mix && scene.mix.length > 1 ? <span className="sc-chip soft">빈틈 {scene.mix.length}개를 한 번에</span> : null}
       <span className="cs-gap" /><Ladder g={gap} />
     </header>
@@ -165,7 +165,7 @@ function SceneCard({ gap, scene, onDone }: { gap: GapLite; scene: SceneLite; onD
       : scene.distance === "same" ? `${gap.origin.title}에서 그때 그대로예요.` : `${gap.origin.title}에서 겪은 일과 비슷해요.`}</p> : null}
     {scene.story ? <p className="sc-story">{scene.story}</p> : null}
     {scene.ask ? <p className="sc-ask">{scene.ask}</p> : null}
-    {scene.structure?.length ? <p className="small muted">이번에는 {scene.structure.join(" · ")}을(를) 써서 해 보세요.</p> : null}
+    {scene.structure?.length ? <p className="small muted">이번에 확인하는 표현: {scene.structure.join(" · ")}</p> : null}
 
     {f === "choice" || f === "error" ? <>
       {f === "error" ? <><CodeBox value={scene.code} readOnly />{scene.inputs[0]?.trim() ? <div className="sc-io"><span className="muted small">입력</span><pre>{scene.inputs[0]}</pre></div> : null}

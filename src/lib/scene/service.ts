@@ -104,7 +104,9 @@ export async function next(gapId: string, opts: { ask?: Ask; mix?: boolean } = {
   let scene: Scene | null = null;
   if (opts.mix !== false && gap.scope === "line" && gap.state.distance === "far" && gap.branch === "algo") {
     const due = Date.now();
-    const others = all.filter((g) => g.id !== gap.id && g.branch === "algo" && g.scope === "line" && g.state.distance === "far" && !g.state.known && !g.dismissed
+    // 알고리즘 고르기의 응용은 변형 문제라 섞지 않는다
+    const mixable = (g: Gap) => g.scope === "line" && g.kind !== "알고리즘 고르기";
+    const others = !mixable(gap) ? [] : all.filter((g) => g.id !== gap.id && g.branch === "algo" && mixable(g) && g.state.distance === "far" && !g.state.known && !g.dismissed
       && Date.parse(g.state.due) <= due + 86_400_000 && g.origin.lang === gap.origin.lang).slice(0, 2);
     if (others.length) scene = await makeScene(gap, { ...(opts.ask ? { ask: opts.ask } : {}), mix: [gap, ...others] }).catch(() => null);
   }

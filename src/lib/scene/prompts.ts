@@ -58,7 +58,7 @@ export const SCENE_SYSTEM = `너는 복습 장면을 만든다. 빈틈(학습자
 - setup: 표준 입력에서 데이터를 읽어 이름 있는 변수에 담는 코드(학습자에게 보여 준다). after: 결과를 출력하는 코드.
 - function: setup에 입력 읽기, template에 함수 머리(def solve(...):와 본문 자리 pass), after에서 그 함수를 불러 출력. reference · wrongs · alsoRight의 code는 함수 전체.
 - write: template = 처음 칸에 둘 코드(없으면 ""). reference · wrongs · alsoRight의 code = 학습자 자리 코드.
-- 확인할 것이 form이면 structure에 "그 표현을 썼나"를 보는 정규식 1~2개(파이썬 re 문법, 학습자 코드에 대해 검사): 모범 답은 맞고 그때 생각은 안 맞아야 한다.
+- 확인할 것이 form이면 structure에 "그 표현을 썼나"를 보는 정규식 1~2개(JS · 파이썬 공통으로 쓰는 단순한 문법, 학습자 코드에 대해 검사): 모범 답은 맞고 그때 생각은 안 맞아야 한다. why는 그 표현의 이름만 짧게(예: "range(횟수)", "sys.stdin.readline").
 ### blank(빈칸 채우기)
 - template = 학습자 자리 코드에 ____(밑줄 4개)를 1~3곳 둔 것. reference · wrongs · alsoRight의 code는 빈칸 답을 한 줄에 하나씩.
 - 확인할 것이 form이면 빈칸을 그 표현이 들어갈 자리에 둔다(다른 방법으로 돌아갈 수 없게).
