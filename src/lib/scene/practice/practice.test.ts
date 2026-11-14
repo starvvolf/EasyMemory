@@ -11,7 +11,7 @@ import { practiceGapId, toGap, type PracticeGapItem } from "./gaps.ts";
 import { gradePracticeScene, makePracticeScene, practiceMaterial, practicePublic } from "./index.ts";
 import { lockWriteScene, structureOk } from "./lock.ts";
 import { checkTimeline, gradeTimeline, interleavings, makeTimelineScene, serialValue, simulate, timelineOf, CONTEXTS } from "./timeline.ts";
-import { checkWhere, gradeWhere, insertGuard, normRange, whereBankScene } from "./where.ts";
+import { checkWhere, gradeWhere, insertGuard, normRange, pickOf, replaceRegion, whereBankScene } from "./where.ts";
 
 const gap = (over: Partial<Gap> = {}): Gap => ({ id: "gap_aaaaaaaaaaaa", branch: "practice", kind: "순서 · 동시성", layer: 5, title: "경쟁 상태", target: "ability", missed: "읽기부터 쓰기까지 한 잠금 안에",
   wrong: "쓰기 줄에만 잠금", wrongVerified: true, kernel: { lang: "javascript", code: "await gate.run(async () => { const left = ammo; ammo = left - n; });", needs: [] }, evidence: [],
@@ -69,7 +69,11 @@ for (const lang of ["javascript", "python"]) {
     const m = (s.practice as { where: { region: { from: number; to: number }; mine: { from: number; to: number }; alsoRight: Array<{ code: string }> } }).where;
     assert.equal((await gradeWhere(s, g, JSON.stringify(m.region))).verdict, "pass");
     assert.equal((await gradeWhere(s, g, JSON.stringify({ from: m.region.to, to: m.region.from }))).verdict, "pass", "거꾸로 골라도 같은 범위");
-    assert.equal((await gradeWhere(s, g, JSON.stringify({ code: m.alsoRight[0].code }))).verdict, "pass", "능력 확인: 다른 맞는 방법(Interlocked 꼴)도 통과");
+    // 코드로 고칠 때 학습자는 고를 수 있는 줄 전체(pickOf, 모범 범위보다 넓음)를 바꿔 쓴다
+    const pick = pickOf(m as never); const full = replaceRegion((m as unknown as { code: string }).code, m.region, m.alsoRight[0].code).split("\n");
+    const delta = full.length - (m as unknown as { code: string }).code.split("\n").length;
+    assert.equal((await gradeWhere(s, g, JSON.stringify({ code: full.slice(pick.from - 1, pick.to + delta).join("\n") }))).verdict, "pass", "능력 확인: 다른 맞는 방법(Interlocked 꼴)도 통과");
+    assert.ok(pick.from < m.region.from || pick.to > m.region.to, "고를 수 있는 줄이 모범 범위보다 넓다(답이 드러나지 않게)");
     assert.equal((await gradeWhere(s, g, JSON.stringify(m.mine))).verdict, "same");
     assert.equal((await gradeWhere(s, g, JSON.stringify({ from: m.region.from, to: m.region.from }))).verdict, "other", "읽기 줄에만 = 다른 틀린 생각");
     assert.equal((await gradeWhere(s, g, JSON.stringify({ from: 1, to: 2 }))).verdict, "unclear", "고를 수 있는 줄 밖");

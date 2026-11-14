@@ -14,6 +14,8 @@ export type WhereMaterial = {
   /** 다른 맞는 방법(능력 확인일 때): 고를 수 있는 줄 전체를 바꾸는 코드(예: Interlocked) */
   alsoRight: Array<{ what: string; code: string }>;
   inputs: string[];
+  /** 학습자가 고를 수 있는 줄(모범 범위보다 넓어야 답이 드러나지 않는다). 없으면 region 앞뒤로 한 줄씩 넓힌 것 */
+  pick?: Range;
 };
 const lines = (code: string) => code.replace(/\r/g, "").split("\n");
 const indentOf = (l: string) => /^\s*/.exec(l)?.[0] ?? "";
@@ -29,10 +31,12 @@ export function insertGuard(code: string, wrap: WhereMaterial["wrap"], r: Range)
 /** 고를 수 있는 줄 전체를 다른 코드로(다른 맞는 방법). 들여쓰기는 그 줄의 것에 맞춘다 */
 export function replaceRegion(code: string, region: Range, text: string) {
   const ls = lines(code);
-  const pad = indentOf(ls[region.from - 1] ?? "");
   const t = lines(text.replace(/\s+$/, ""));
-  const base = Math.min(...t.filter((l) => l.trim()).map((l) => indentOf(l).length), 99);
-  return [...ls.slice(0, region.from - 1), ...t.map((l) => (l.trim() ? pad + l.slice(base === 99 ? 0 : base) : l)), ...ls.slice(region.to)].join("\n");
+  // 들여쓰기: 바꿀 줄들의 가장 얕은 들여쓰기에 새 글의 가장 얕은 들여쓰기를 맞춘다(글을 통째로 옮겨 써도, 들여쓰기 없이 써도 된다)
+  const minIndent = (xs: string[]) => Math.min(...xs.filter((l) => l.trim()).map((l) => indentOf(l).length), 99);
+  const want = minIndent(ls.slice(region.from - 1, region.to)), base = minIndent(t);
+  const shift = (l: string) => (want === 99 || base === 99 ? l : want >= base ? " ".repeat(want - base) + l : l.slice(base - want));
+  return [...ls.slice(0, region.from - 1), ...t.map((l) => (l.trim() ? shift(l) : l)), ...ls.slice(region.to)].join("\n");
 }
 /** 범위의 "모양": 앞뒤의 빈 줄 · 괄호만 있는 줄 · 주석 줄은 빼고 남은 줄 */
 export function normRange(code: string, r: Range): Range {
@@ -44,7 +48,9 @@ export function normRange(code: string, r: Range): Range {
   return { from, to };
 }
 const sameRange = (a: Range, b: Range) => a.from === b.from && a.to === b.to;
-const inRegion = (m: WhereMaterial, r: Range) => Number.isInteger(r.from) && Number.isInteger(r.to) && r.from >= m.region.from && r.to <= m.region.to && r.from <= r.to;
+/** 고를 수 있는 줄: 모범 범위 = 고를 수 있는 줄 전체이면 답이 드러나므로(11/15 통합 시험) 앞뒤로 넓힌다 */
+export const pickOf = (m: WhereMaterial): Range => m.pick ?? { from: Math.max(1, m.region.from - 1), to: Math.min(lines(m.code).length, m.region.to + 1) };
+const inRegion = (m: WhereMaterial, r: Range) => { const k = pickOf(m); return Number.isInteger(r.from) && Number.isInteger(r.to) && r.from >= k.from && r.to <= k.to && r.from <= r.to; };
 const shapes = (rs: RunOut[]) => rs.map(shapeOf);
 async function stable(lang: string, program: string, stdins: string[]) {
   const a = shapes(await runAll(lang, program, stdins, 6000)), b = shapes(await runAll(lang, program, stdins, 6000));
@@ -61,6 +67,7 @@ export async function checkWhere(scene: Scene): Promise<Scene> {
   if (m.region.from < 1 || m.region.to > n || m.region.from > m.region.to) problems.push("고를 수 있는 줄 범위가 코드 밖이에요.");
   for (const [k, r] of [["모범", m.answer], ["그때", m.mine], ...m.others.map((o) => [o.id, o] as const)] as const) if (!inRegion(m, r)) problems.push(`${k} 범위가 고를 수 있는 줄 밖이에요.`);
   if (sameRange(normRange(m.code, m.answer), normRange(m.code, m.mine))) problems.push("그때 범위가 모범 범위와 같은 모양이에요.");
+  if (sameRange(pickOf(m), m.answer)) problems.push("고를 수 있는 줄이 모범 범위와 같아요(답이 드러나요).");
   if (!m.inputs.length) problems.push("입력이 없어요.");
   if (problems.length) return { ...scene, check: { ok: false, problems } };
   const ref = await stable(scene.lang, insertGuard(m.code, m.wrap, m.answer), m.inputs);
@@ -93,11 +100,12 @@ export function programOfWhere(scene: Scene, a: WhereAnswer): { program: string;
   if (a.code !== undefined) {
     if (scene.target === "form") return { error: "이 장면은 그 표현(넣을 자리)을 고르는 장면이에요. 줄 범위를 골라 주세요." };
     if (!a.code.trim()) return { error: "코드가 비어 있어요." };
-    return { program: replaceRegion(m.code, m.region, a.code) };
+    // 학습자는 고를 수 있는 줄 전체를 바꿔 쓴다(모범 범위를 화면에 보이지 않으려고)
+    return { program: replaceRegion(m.code, pickOf(m), a.code) };
   }
   if (a.from === undefined || a.to === undefined) return { error: "줄 범위를 골라 주세요." };
   const r = { from: Math.min(a.from, a.to), to: Math.max(a.from, a.to) };
-  if (!inRegion(m, r)) return { error: `${m.region.from}~${m.region.to}줄 안에서 골라 주세요.` };
+  if (!inRegion(m, r)) return { error: `${pickOf(m).from}~${pickOf(m).to}줄 안에서 골라 주세요.` };
   return { program: insertGuard(m.code, m.wrap, r), range: r };
 }
 /** 채점: 돌려서 모두 정답이면 통과. 범위가 그때 범위와 같은 모양이면 같은 실수, 다른 틀린 범위와 같으면 다른 실수, 그 밖은 미확정 */
@@ -132,7 +140,7 @@ export async function previewWhere(scene: Scene, answer: string) {
 }
 export function wherePublic(scene: Scene) {
   const m = matOf(scene)!;
-  return { kind: "where", guard: m.guard, code: m.code, region: m.region, wrap: m.wrap, allowCode: scene.target === "ability",
+  return { kind: "where", guard: m.guard, code: m.code, region: pickOf(m), wrap: m.wrap, allowCode: scene.target === "ability",
     inputs: scene.inputs.filter((x) => x.role === "basic").map((x) => x.stdin).slice(0, 2) };
 }
 
@@ -218,7 +226,7 @@ export function whereBankScene(gap: Gap, id: string): Scene | null {
   const m: WhereMaterial = { ...b, inputs: ["1", "2", "3", "5"] };
   return { id, gapId: gap.id, format: "where", lang: gap.origin.lang, distance: gap.state.distance, target: gap.target,
     story: "여러 요청이 같은 총의 탄약 ammo를 동시에 줄여요. 입력은 동시에 쏘는 요청 수, 출력 ok는 탄약이 맞게 줄었다는 뜻이에요.",
-    ask: `잠금을 걸 줄 범위를 ${m.region.from}~${m.region.to}줄 안에서 골라 보세요.${gap.target === "ability" ? " 다른 방법으로 고쳐도 돼요." : ""}`,
+    ask: `잠금을 걸 줄 범위를 ${pickOf(m).from}~${pickOf(m).to}줄 안에서 골라 보세요.${gap.target === "ability" ? " 다른 방법으로 고쳐도 돼요." : ""}`,
     explain: "읽기부터 쓰기까지를 한 잠금 안에 넣어야, 다른 요청이 그 사이에 끼어들지 못해요.",
     setup: "", after: "", reference: JSON.stringify(m.answer), alsoRight: m.alsoRight.map((x) => x.code),
     wrongs: [{ id: "mine", what: m.mine.what, code: JSON.stringify({ from: m.mine.from, to: m.mine.to }) }, ...m.others.map((o) => ({ id: o.id, what: o.what, code: JSON.stringify({ from: o.from, to: o.to }) }))],

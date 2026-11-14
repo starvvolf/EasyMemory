@@ -19,7 +19,7 @@ const fieldsOf = (scene: PracticeSceneLite) => ({ ...scene, ...((scene.practice 
 export function PracticeBody({ scene, disabled, onAnswer }: { scene: PracticeSceneLite; disabled: boolean; onAnswer: (answer: string) => void }) {
   const f = fieldsOf(scene);
   switch (scene.format) {
-    case "where": return <WhereBody id={scene.id} code={String(f.code ?? "")} region={f.region as Range} wrap={f.wrap as { before: string; after: string }} allowCode={Boolean(f.allowCode)}
+    case "where": return <WhereBody id={scene.id} code={String(f.code ?? "")} region={f.region as Range} rewrite={(f.rewrite ?? f.region) as Range} wrap={f.wrap as { before: string; after: string }} allowCode={Boolean(f.allowCode)}
       inputs={(f.inputs as string[] | undefined) ?? []} disabled={disabled} onAnswer={onAnswer} />;
     case "timeline": return <TimelineBody name={String(f.name ?? "")} unit={String(f.unit ?? "")} init={Number(f.init ?? 0)} shown={(f.shown as Step[]) ?? []} steps={(f.steps as Step[]) ?? []} disabled={disabled} onAnswer={onAnswer} />;
     case "command": return <CommandBody task={String(f.task ?? "")} files={(f.files as string[]) ?? []} disabled={disabled} onAnswer={onAnswer} />;
@@ -30,12 +30,12 @@ export function PracticeBody({ scene, disabled, onAnswer }: { scene: PracticeSce
 }
 
 /* ---------- 13 어디에 넣을까 ---------- */
-function WhereBody({ code, region, wrap, allowCode, inputs, disabled, onAnswer }: { id: string; code: string; region: Range; wrap: { before: string; after: string }; allowCode: boolean; inputs: string[]; disabled: boolean; onAnswer: (a: string) => void }) {
+function WhereBody({ code, region, rewrite, wrap, allowCode, inputs, disabled, onAnswer }: { id: string; code: string; region: Range; rewrite: Range; wrap: { before: string; after: string }; allowCode: boolean; inputs: string[]; disabled: boolean; onAnswer: (a: string) => void }) {
   const lines = code.split("\n");
   const [start, setStart] = useState<number | null>(null);
   const [pick, setPick] = useState<Range | null>(null);
   const [mode, setMode] = useState<"range" | "code">("range");
-  const [alt, setAlt] = useState(() => lines.slice(region.from - 1, region.to).join("\n"));
+  const [alt, setAlt] = useState(() => lines.slice(rewrite.from - 1, rewrite.to).join("\n"));
   const inRegion = (n: number) => n >= region.from && n <= region.to;
   const click = (n: number) => {
     if (disabled || !inRegion(n) || mode !== "range") return;
@@ -63,7 +63,7 @@ function WhereBody({ code, region, wrap, allowCode, inputs, disabled, onAnswer }
       {allowCode ? <button className="btn ghost small" disabled={disabled} onClick={() => { const m = mode === "range" ? "code" : "range"; setMode(m); onAnswer(m === "code" ? JSON.stringify({ code: alt }) : pick ? JSON.stringify(pick) : ""); }}>
         {mode === "range" ? "다른 방법으로 고치기" : "줄 범위로 고르기"}</button> : null}
     </div>
-    {mode === "code" ? <label className="sc-field"><span className="small muted">{region.from}~{region.to}줄을 이렇게 바꿔요</span>
+    {mode === "code" ? <label className="sc-field"><span className="small muted">{rewrite.from}~{rewrite.to}줄을 이렇게 바꿔요</span>
       <textarea className="sc-code" spellCheck={false} rows={Math.max(4, alt.split("\n").length + 1)} value={alt} disabled={disabled}
         onChange={(e) => { setAlt(e.target.value); onAnswer(e.target.value.trim() ? JSON.stringify({ code: e.target.value }) : ""); }} /></label> : null}
     {inputs.length ? <p className="small muted">보이는 입력: {inputs.join(" · ")} (채점은 숨은 입력까지)</p> : null}
