@@ -80,6 +80,9 @@ test("사다리 · 범위 · 세기: 틀린 횟수는 범위를 키우지 않고
   g = reflect(g, "pass", {}, 0); assert.equal(g.state.distance, "far");
   g = reflect(g, "same", {}, 0); assert.equal(g.state.distance, "near"); assert.equal(g.dose.level, 2);
   g = reflect(g, "same", {}, 0); assert.equal(g.state.distance, "same", "같은 실수 두 번 연속 → 똑같이");
+  // 세기 3(같은 실수 두 번으로 올라감): 한 거리에서 두 번 통과해야 다음 칸
+  g = reflect(g, "pass", {}, 0); assert.equal(g.state.distance, "same", "세기 3은 통과해도 한 번 더");
+  g = reflect(g, "pass", {}, 0); assert.equal(g.state.distance, "near");
   g = reflect(g, "pass", {}, 0); g = reflect(g, "pass", {}, 0); assert.equal(g.state.distance, "far"); assert.equal(g.state.known, false);
   g = reflect(g, "pass", {}, 0); assert.equal(g.state.known, true, "응용 통과 = 앎");
   const h = reflect(gap(), "pass", { hinted: true }, 0); assert.equal(h.state.distance, "near", "힌트 보고 통과는 몰랐음");

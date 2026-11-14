@@ -32,8 +32,12 @@ export function reflect(gap: Gap, verdict: SceneVerdict, o: { hinted?: boolean; 
   let level = gap.dose.level;
   if (verdict === "pass" && !o.hinted) {
     s.streak = { same: 0, unclear: 0 };
+    // 세기 2: 비슷하게를 다른 상황으로 두 번 · 세기 3: 똑같이 · 비슷하게를 통과해도 한 번 더 (응용은 한 번이면 앎)
+    const need = s.distance !== "far" && level >= 2 ? 2 : 1;
+    s.here = (s.here ?? 0) + 1;
     if (s.distance === "far") { s.known = true; s.due = at(30, now); }
-    else { s.distance = FAR[s.distance]; s.due = at(level === 3 ? 1 : GAPS[Math.min(s.passes, GAPS.length - 1)], now); }
+    else if (s.here >= need) { s.distance = FAR[s.distance]; s.here = 0; s.due = at(level === 3 ? 1 : GAPS[Math.min(s.passes, GAPS.length - 1)], now); }
+    else s.due = at(level === 3 ? 1 : 2, now);
     s.passes++;
   } else if (verdict === "pass") {
     // 힌트를 보고 통과 = 도움받고 넘어감 = 아직 몰랐음(리뷰 기준과 같음)
@@ -43,6 +47,7 @@ export function reflect(gap: Gap, verdict: SceneVerdict, o: { hinted?: boolean; 
     s.streak.unclear = 0;
     s.known = false;
     s.distance = s.streak.same >= 2 ? "same" : NEAR[s.distance];
+    s.here = 0;
     s.due = at(1, now);
   } else if (verdict === "other") {
     // 이 빈틈이 아니라 다른 것: 기록은 안 깎고 며칠 뒤 한 번 더
@@ -50,7 +55,7 @@ export function reflect(gap: Gap, verdict: SceneVerdict, o: { hinted?: boolean; 
     s.due = at(3, now);
   } else {
     s.unclear++; s.streak.unclear++; s.streak.same = 0;
-    if (s.streak.unclear >= 2) s.distance = "same";
+    if (s.streak.unclear >= 2) { s.distance = "same"; s.here = 0; }
     s.due = at(2, now);
   }
   return { ...gap, dose: { level }, state: s, ...(s.unclear >= 3 && s.passes === 0 ? { doubtful: true } : {}) };

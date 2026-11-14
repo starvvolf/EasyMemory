@@ -150,13 +150,13 @@ async function materialOf(gap: Gap, rec?: Record_): Promise<{ mat: Material; rec
 }
 
 /** 빈틈의 지금 거리에 맞는 장면 하나. 섞기(mix)가 주어지면 그 빈틈들을 한 장면에(응용). */
-export async function makeScene(gap: Gap, opts: { ask?: Ask; rec?: Record_; mix?: Gap[] } = {}): Promise<Scene | null> {
+export async function makeScene(gap: Gap, opts: { ask?: Ask; rec?: Record_; mix?: Gap[]; /** 시험 · 가상 학습자용: 형식 순서를 정해 줌 */ formats?: Format[] } = {}): Promise<Scene | null> {
   const ask = opts.ask ?? defaultAsk;
   const { mat, rec } = await materialOf(gap, opts.rec);
   const keep = async (s: Scene | null) => { if (s?.check?.ok) { await saveScene(s); return s; } return null; };
   if (opts.mix && opts.mix.length > 1) return keep(await aiScene(gap, "function", mat, ask, 2, opts.mix));
   const hasWrong = rec ? Boolean(wrongSubOf(gap, rec)) : gap.state.distance === "same";
-  const chain = gap.branch === "practice" ? practiceFormats(gap) : formatsFor(gap, { hasWrongSubmission: hasWrong, lang: gap.origin.lang });
+  const chain = opts.formats ?? (gap.branch === "practice" ? practiceFormats(gap) : formatsFor(gap, { hasWrongSubmission: hasWrong, lang: gap.origin.lang }));
   for (const [i, f] of chain.entries()) {
     let s: Scene | null = null;
     if (gap.state.distance === "same" && rec && i === 0 && hasWrong && (f === "fix" || f === "blank")) s = f === "fix" ? await sameScene(gap, rec) : await sameLineScene(gap, rec);

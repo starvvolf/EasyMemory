@@ -68,11 +68,13 @@ function BlankCode({ template, fills, setFills, disabled, view }: { template: st
   </div>;
 }
 
-/** 순서 맞추기: 줄을 위아래로 옮기고 들여쓰기를 맞춘다(끌어 놓기 대신 단추 — 키보드로도 된다) */
+/** 순서 맞추기: 줄을 끌어 놓거나 단추로 옮기고, 들여쓰기를 맞춘다(키보드로도 된다) */
 function OrderBox({ pieces, value, setValue, disabled }: { pieces: string[]; value: Array<{ i: number; d: number }>; setValue: (v: Array<{ i: number; d: number }>) => void; disabled: boolean }) {
   const move = (k: number, by: number) => { const v = [...value]; const j = k + by; if (j < 0 || j >= v.length) return; [v[k], v[j]] = [v[j], v[k]]; setValue(v); };
   const indent = (k: number, by: number) => setValue(value.map((x, q) => (q === k ? { ...x, d: Math.max(0, Math.min(4, x.d + by)) } : x)));
-  return <ol className="sc-order">{value.map((x, k) => <li key={x.i}>
+  const drop = (k: number, from: number) => { if (from === k || Number.isNaN(from)) return; const v = [...value]; const [it] = v.splice(from, 1); v.splice(k, 0, it); setValue(v); };
+  return <ol className="sc-order">{value.map((x, k) => <li key={x.i} draggable={!disabled} onDragStart={(e) => e.dataTransfer.setData("text/plain", String(k))}
+    onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); drop(k, Number(e.dataTransfer.getData("text/plain"))); }}>
     <code style={{ paddingLeft: `${x.d * 2}ch` }}>{pieces[x.i]}</code><span className="cs-gap" />
     <button className="btn ghost small" disabled={disabled} aria-label="내어 쓰기" onClick={() => indent(k, -1)}>⇤</button>
     <button className="btn ghost small" disabled={disabled} aria-label="들여 쓰기" onClick={() => indent(k, 1)}>⇥</button>

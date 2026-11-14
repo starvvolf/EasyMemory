@@ -22,6 +22,7 @@ export type GapState = {
   /** 응용을 통과하면 앎 */ known: boolean;
   /** 다음에 볼 날(ISO). 없으면 지금. */ due: string;
   /** 같은 실수 · 미확정이 연달아 몇 번 */ streak: { same: number; unclear: number };
+  /** 지금 거리에서 통과한 횟수(세기 2 · 3은 한 거리에서 두 번 통과해야 다음 칸, 설계 1번 세기 표) */ here?: number;
 };
 export type Gap = {
   id: string; branch: "algo" | "practice"; kind: GapKind; layer: number;
