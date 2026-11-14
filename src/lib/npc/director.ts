@@ -8,7 +8,7 @@ import { dice, weighted } from "./dice.ts";
 import { guardCode, routeVerdict, syntaxLeaks, verdictOf, type Verdicted } from "./guard.ts";
 import { fragmentOf, program, slotsOfStep } from "./map.ts";
 import { holdings } from "./profile.ts";
-import type { CodeAsk, CodeOut, ProblemBrief, SpeechKind, Voice } from "./voice.ts";
+import { scrubExamples, type CodeAsk, type CodeOut, type ProblemBrief, type SpeechKind, type Voice } from "./voice.ts";
 import type { Fragment, KeyEvent, KnowState, Played, ProblemMap, Reaction, Route, Spec } from "./types.ts";
 import type { TestCase } from "../code/run.ts";
 
@@ -151,7 +151,8 @@ export async function play(input: PlayInput): Promise<Played> {
 
   /* ---------- 손 ---------- */
   const allowedFor = (r: Route | null): Fragment[] => {
-    const all = [...holds].map(frag).filter(Boolean);
+    // 가진 조각의 예시에 모르는 문법이 섞여 있으면 그 줄은 지운다(11/15 대역 모델 시험: adj-list 예시에 [[] for …]가 그대로 새었음)
+    const all = scrubExamples([...holds].map(frag).filter(Boolean), unknownSyntax());
     if (mode === "loose" || !r) return all;
     return all.filter((f) => r.needs.includes(f.id) || f.layer === 1 || Object.values(r.slots).some((s) => f.id in s.alts));
   };
@@ -211,7 +212,7 @@ export async function play(input: PlayInput): Promise<Played> {
   type Stuck = { kind: "missing" | "wrong" | "method"; fragment: string; right?: string; step?: number; verdict?: string };
   const askTutor = async (question: string, selection: string) => {
     act(); counts.asked++;
-    const answer = await driver.ask({ question, code: code || "# (아직 비어 있음)", selection: selection || code.split("\n").slice(0, 3).join("\n") || question, history: [...history], last: lastRun() })
+    const answer = await driver.ask({ question, code: code || "# (아직 비어 있음)", selection: selection || code.split("\n").filter((l) => l.trim()).slice(-3).join("\n") || question, history: [...history], last: lastRun() })
       .catch((e) => `(튜터 답 실패: ${(e as Error).message})`);
     history.push({ q: question, a: answer });
     return answer;
@@ -291,7 +292,7 @@ export async function play(input: PlayInput): Promise<Played> {
       : s.kind === "wrong" ? verdictSituation(last ?? { verdict: s.verdict ?? "WA", passed: 0, total: 0, compile: "" })
       : f?.layer === 1 ? "하려는 건 알겠는데 이 줄을 파이썬으로 어떻게 쓰는지 모르겠어요." : "이 걸음에서 무엇을 어떻게 해야 할지 모르겠어요.";
     const question = await say(kind, situation, { ...(step ? { step: step.text } : {}), ...(s.verdict ? { verdict: VERDICT_KO[s.verdict] ?? s.verdict } : {}) });
-    const answer = await askTutor(question, step?.code ?? "");
+    const answer = await askTutor(question, "");
     const block = codeBlock(answer);
     if (block && roll(`copy:${t}`) < tr.copyTutor) {
       // 복붙형: 튜터 코드를 그대로 붙여 넣고 낸다 → 맞혀도 조각은 안 생김
@@ -307,7 +308,7 @@ export async function play(input: PlayInput): Promise<Played> {
     // 확인 연타: 맞는지 한 번 더 묻는다(설명을 한 번 더 들으니 배울 기회도 한 번 더)
     if (roll(`confirm-ask:${t}`) < tr.confirm && counts.asked < caps.asks) {
       const q2 = await say("confirm", "방금 알려 준 대로 하면 되는지", step ? { step: step.text } : {});
-      const a2 = await askTutor(q2, step?.code ?? "");
+      const a2 = await askTutor(q2, "");
       const more = await judgeLearn(a2, le.perExplain, `confirm:${counts.asked}`);
       taught = [...new Set([...taught, ...more.taught])]; got = [...got, ...more.got];
     }

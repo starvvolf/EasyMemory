@@ -28,6 +28,12 @@ export type Voice = {
   sceneAnswer(view: Record<string, unknown>, allowed: Fragment[], wrongs: Fragment[]): Promise<string | null>;
 };
 
+/** 조각 예시에서 모르는 문법(leak 모양)이 든 줄을 지운다: 아는 조각을 보여 주다 모르는 문법을 새게 하지 않으려고 */
+export function scrubExamples(fs: Fragment[], unknownSyntax: Fragment[]): Fragment[] {
+  const pats = unknownSyntax.flatMap((u) => u.leak ?? []).map((p) => { try { return new RegExp(p); } catch { return null; } }).filter((x): x is RegExp => Boolean(x));
+  if (!pats.length) return fs;
+  return fs.map((f) => ({ ...f, example: f.example.split("\n").map((l) => (pats.some((p) => p.test(l)) ? `${l.match(/^\s*/)?.[0] ?? ""}# (이 줄을 만드는 문법은 아직 모름)` : l)).join("\n") }));
+}
 const fragLines = (fs: Fragment[]) => fs.map((f) => `- ${f.id} (${f.layer}층): ${f.what}\n${f.example.split("\n").map((l) => `    ${l}`).join("\n")}`).join("\n");
 const brief = (p: ProblemBrief) => `[문제] ${p.title}\n${p.statement}\n[입력] ${p.inputText}\n[출력] ${p.outputText}`;
 

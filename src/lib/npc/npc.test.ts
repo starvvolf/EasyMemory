@@ -17,7 +17,7 @@ import { plants } from "./plant.ts";
 import { buildSpec, conflicts, holdings, loadOptions, loadSpec, overlay, validated } from "./profile.ts";
 import { fixAnswer, fragmentsIn, scoreGaps } from "./score.ts";
 import type { OptionPatch, Played } from "./types.ts";
-import { codeUser, dryVoice, keywordLearned } from "./voice.ts";
+import { codeUser, dryVoice, keywordLearned, scrubExamples } from "./voice.ts";
 import { offlineDriver } from "./algo-driver.ts";
 import { ALLOWED_COMMAND, inside } from "./practice-driver.ts";
 
@@ -122,6 +122,9 @@ test("입과 손: 허용된 조각만 보내고 모범 풀이는 안 보낸다 �
   assert.ok(u.includes("tool.queue") && !u.includes("idea.mark-visited"), "허용 안 된 조각은 안 감");
   assert.ok(!u.includes(PACK_2606.referenceJs.slice(0, 40)), "모범 풀이는 안 감");
   assert.match(u, /여기까지만/);
+  // 아는 조각의 예시에 모르는 문법(빈 목록 N개)이 섞이면 그 줄은 지운다(대역 모델 시험에서 찾은 누수)
+  const scrubbed = scrubExamples(allowed, MAP.fragments.filter((f) => f.id === "syntax.py.2d-list"));
+  assert.ok(!codeUser({ problem: PACK_2606, mode: "strict", route: a, picks: rightPicks(a), allowed: scrubbed, previous: "" }).includes("[[] for"));
   assert.deepEqual(keywordLearned("방문한 곳은 표시해 두세요. deque로 꺼내요.", MAP.fragments).sort(), ["idea.mark-visited", "tool.queue"]);
   const e = MAP.routes.find((r) => r.id === "E")!;
   assert.match(dryTutorAnswer(MAP, "시간 초과가 나요", program(e, rightPicks(e))), /표시/);

@@ -8,7 +8,7 @@ import type { Gap } from "../scene/types.ts";
 import { dice } from "./dice.ts";
 import { verdictOf } from "./guard.ts";
 import { allTests, fragmentOf, picksFor, program, routeFor, type ProblemPack } from "./map.ts";
-import type { Voice } from "./voice.ts";
+import { scrubExamples, type Voice } from "./voice.ts";
 import type { Fragment, KeyEvent, Played, ProblemMap } from "./types.ts";
 
 /* ---------- 글 → 조각 ---------- */
@@ -155,7 +155,9 @@ export async function sceneStage(input: { map: ProblemMap; played: Played; pack:
     run.made = true; run.format = scene.format;
     const answerFor = async (holds: Set<string>) => {
       if (scene.format === "fix") return fixAnswer(map, scene.origin?.code ?? scene.template ?? "", holds, played.end.route);
-      const a = await input.voice.sceneAnswer(publicScene(scene) as unknown as Record<string, unknown>, frags(holds).filter((f) => !f.wrong), frags(holds).filter((f) => f.wrong)).catch(() => null);
+      const unknown = map.fragments.filter((f) => f.layer === 1 && !f.wrong && !holds.has(f.id));
+      const known = scrubExamples(frags(holds), unknown);
+      const a = await input.voice.sceneAnswer(publicScene(scene) as unknown as Record<string, unknown>, known.filter((f) => !f.wrong), known.filter((f) => f.wrong)).catch(() => null);
       return a;
     };
     for (const [side, holds] of [["before", before], ["after", after]] as const) {
@@ -169,6 +171,22 @@ export async function sceneStage(input: { map: ProblemMap; played: Played; pack:
     out.push(run);
   }
   return out;
+}
+
+/* ---------- 검사 5: 진짜 사람과 맞춰 보기 ---------- */
+/** 막힌 곳 · 물은 것의 층 분포(1~6층). 사람 기록(예: 2606 말 34개의 층 표)과 "나 닮은 NPC"를 나란히 본다. */
+export function layerDistribution(p: Played): Record<string, number> {
+  const out: Record<string, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  for (const k of p.key) if ("stuck" in k && k.layer >= 1 && k.layer <= 6) out[k.layer]++;
+  return out;
+}
+export function compareLayers(human: Record<string, number>, npc: Record<string, number>) {
+  const sum = (x: Record<string, number>) => Object.values(x).reduce((a, b) => a + b, 0) || 1;
+  const hs = sum(human), ns = sum(npc);
+  const rows = ["1", "2", "3", "4", "5", "6"].map((l) => ({ layer: l, human: (human[l] ?? 0) / hs, npc: (npc[l] ?? 0) / ns }));
+  // 두 분포의 차이(전체 변동 거리, 0 = 같음 · 1 = 전혀 다름)
+  const tv = rows.reduce((s, r) => s + Math.abs(r.human - r.npc), 0) / 2;
+  return { rows, tv, md: ["| 층 | 사람 | NPC |", "|---|---|---|", ...rows.map((r) => `| ${r.layer} | ${(r.human * 100).toFixed(0)}% | ${(r.npc * 100).toFixed(0)}% |`), "", `차이(전체 변동 거리) ${tv.toFixed(2)} — 0이면 같고 1이면 전혀 달라요.`].join("\n") };
 }
 
 /* ---------- 보고서 ---------- */

@@ -76,7 +76,7 @@ if (opt("plant")) {
     switchDataDir(path.join(dataRoot, `plant-${i}`));
     const d = dry ? installDry(map) : null;
     const r = await runPlant(map, pack, p, { keyGap: dry }).finally(() => d?.uninstall());
-    console.log(`  심음 ${p.id}(${p.verdict}): 잡음 ${r.caught ? "예" : "아니오"} · 빈틈 ${r.gaps.length} · 장면 ${r.scene ? `${r.scene.format} 심은 코드 ${r.scene.planted} / 고친 코드 ${r.scene.fixed}` : "없음"}${r.why ? ` (${r.why})` : ""}`);
+    console.log(`  심음 ${p.id}(${p.verdict}): 잡음 ${dry ? "AI 필요" : r.caught ? "예" : "아니오"} · 빈틈 ${r.gaps.length} · 장면 ${r.scene ? `${r.scene.format} 심은 코드 ${r.scene.planted} / 고친 코드 ${r.scene.fixed}` : "없음"}${r.why ? ` (${r.why})` : ""}`);
     rows.push(`| ${p.id} | ${p.what} | ${p.verdict} | ${dry ? "AI 필요" : r.caught ? "예" : "아니오"} | ${r.gaps.map((g: { title: string; fragments: string[] }) => `${g.title}(${g.fragments.join(",") || "-"})`).join("<br>") || "-"} | ${r.scene ? `${r.scene.format}: 심은 코드 ${r.scene.planted} · 고친 코드 ${r.scene.fixed}` : "-"} |`);
   }
   const md = [`# 심기 모드 — ${problem} (${stamp})`, "", "우리가 심은 실수를 우리 시스템이 찾는지(두 시스템이 맞물리는지)만 보는 회귀 시험이에요.", "",
@@ -158,5 +158,15 @@ const report = [`# 가상 학습자 실행 — ${problem} ${map.title} (${stamp}
   summaryTable(scores as never), "",
   ...((scores as Array<{ played: { spec: { id: string } }; name: string }>).map((s) => `- [${s.name}](${s.played.spec.id}/report.md)`)), "",
   "판정 기준(설계 8번): 예상 길과 실제 코드의 길이 같은지는 각 보고서의 \"마지막 코드\"를 사람이 읽고 확인한다. 막힌 자리가 빠진 조각 자리인지는 자동 확인 표에 있다.", ""].join("\n");
-await writeFile(path.join(runDir, "report.md"), report, "utf8");
+// 진짜 사람과 맞춰 보기(설계 5번의 5): --human <파일.json> = {"1": 말 수, "2": …}(사람 기록의 층 분포)
+let human = "";
+if (opt("human")) {
+  const { compareLayers, layerDistribution } = await import(path.join(LIB, "score.ts"));
+  const h = JSON.parse(await readFile(opt("human")!, "utf8"));
+  const npcAll: Record<string, number> = {};
+  for (const s of scores as Array<{ played: never }>) for (const [k, v] of Object.entries(layerDistribution(s.played) as Record<string, number>)) npcAll[k] = (npcAll[k] ?? 0) + v;
+  human = `\n## 진짜 사람과 맞춰 보기(막힌 층 분포)\n\n${compareLayers(h, npcAll).md}\n`;
+  console.log(human);
+}
+await writeFile(path.join(runDir, "report.md"), report + human, "utf8");
 console.log(`\n${summaryTable(scores as never)}\n\n보고서: ${path.relative(ROOT, path.join(runDir, "report.md"))}`);
