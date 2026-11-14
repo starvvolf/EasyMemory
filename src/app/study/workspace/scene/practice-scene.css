@@ -1,0 +1,25 @@
+/* 상황 재현 · 실습 형식 몸통(13~17 · 12) */
+.ps-code { font-family: var(--mono); font-size: 13px; line-height: 1.55; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow-x: auto; padding: 4px 0; }
+.ps-line { display: flex; gap: 10px; padding: 0 10px; white-space: pre; }
+.ps-line .ps-no { color: var(--faint); min-width: 2.2em; text-align: right; user-select: none; }
+.ps-line.pick { cursor: pointer; }
+.ps-line.pick:hover { background: var(--accent-soft); }
+.ps-line.out { color: var(--faint); }
+.ps-line.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.ps-line.wrap { color: var(--accent); font-style: italic; }
+.ps-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ps-tl { display: grid; grid-template-columns: 2.4em 1fr 1fr; gap: 2px 8px; font-size: 13px; }
+.ps-tl .ps-h { font-weight: 700; color: var(--muted); font-size: 12px; }
+.ps-tl .ps-t { color: var(--faint); text-align: right; }
+.ps-step { font-family: var(--mono); font-size: 12.5px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; }
+.ps-step.A { border-left: 3px solid var(--accent); }
+.ps-step.B { border-left: 3px solid var(--help); }
+button.ps-step { cursor: pointer; }
+button.ps-step:disabled { opacity: .35; cursor: default; }
+.ps-pool { display: flex; flex-wrap: wrap; gap: 6px; }
+.ps-order { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ps-order li { display: grid; grid-template-columns: 2em 1fr 1fr auto; gap: 6px; align-items: center; }
+.ps-term { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 13.5px; border: 1px solid var(--accent); border-radius: 8px; padding: 6px 10px; background: var(--surface); }
+.ps-term input { flex: 1; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; }
+.ps-files { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.ps-box { padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line); display: flex; flex-direction: column; gap: 6px; }
