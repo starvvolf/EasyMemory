@@ -104,7 +104,7 @@ function StudyFace({ top, pickedKey, onPick, makingOf }: { top: Entry; pickedKey
     {e.row.lastAt ? <button className="btn small" onClick={() => toMemory(e.key)}>기억 보기 →</button> : null}</>;
   return <>
     {m && m.status !== "running" ? <MakingNote m={m} /> : null}
-    <MaterialMap key={genId} genId={genId} onPage={(p) => openPeek(genId, p)} onClose={() => {}} embedded extra={extra} />
+    <MaterialMap key={genId} genId={genId} onPage={(p) => openPeek(genId, p)} extra={extra} />
   </>;
 }
 

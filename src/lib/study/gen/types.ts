@@ -3,7 +3,6 @@
 
 export const purposes = ["read", "understand", "core", "all"] as const;
 export type Purpose = (typeof purposes)[number];
-export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", understand: "이해", core: "핵심 암기", all: "통암기" };
 
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
@@ -16,10 +15,6 @@ export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 �
 
 export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha", "recaller"] as const;
 export type Engine = (typeof engines)[number];
-/** astra and v4 (Claude's tuning of astra) share the astra pipeline, steps and state; v4 only adds rules. */
-export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4" || engine === "v5" || engine === "alpha";
-/** v5 and its successor alpha (GPT의 v5 개선안: 계획이 문항 설계 assessment까지 정하고 출제가 그대로 구현) share the v5 pipeline. */
-export const v5Family = (engine: Engine | undefined) => engine === "v5" || engine === "alpha";
 /** v5 learning formats (보관/협업/설계와논의/설계_생성엔진v5_Claude_20261019.md); each maps to one of the study screen's response kinds. */
 export const studyFormats = ["choice", "ox", "short", "cloze", "flashcard"] as const;
 export type StudyFormat = (typeof studyFormats)[number];
@@ -31,9 +26,6 @@ export type GenSurvey = { style?: "recall" | "understand"; difficulty?: "easy" |
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
 export type ItemKind = (typeof itemKinds)[number];
-/** Kinds that are never a learning target on their own: material for problems (situations, numbers), or course
- * administration (학습 지시: objectives lists, class procedure, grading — 리허설 2026-10-12 s5·s6·s8). */
-export const materialKinds: readonly ItemKind[] = ["예시", "연습문제", "부가 정보", "학습 지시"];
 
 export const objectiveKinds = ["용어", "사실", "개념", "관계", "절차", "공식", "패턴"] as const;
 export type ObjectiveKind = (typeof objectiveKinds)[number];
@@ -204,17 +196,12 @@ export type Objective = {
   qtype?: string;
   conceptIds?: string[];
   relationIds?: string[];
-  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[]; keepGoal?: boolean;
+  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: unknown[]; keepGoal?: boolean;
     /** v5: what the learner must be able to do, the format chosen for it, and whether a figure is the evidence. */
     level?: string; format?: StudyFormat; figurePages?: number[];
     /** alpha: how the goal is assessed — the knowledge to check, the operation, and what separates the answer from plausible wrong ones. */
     assessment?: Assessment };
 };
-
-/** Objectives checked by default at the confirmation: everything for 통암기, otherwise only core ones. */
-export function defaultChosen(purpose: Purpose, objectives: Array<{ id: string; importance: "core" | "support" }>) {
-  return objectives.filter((objective) => purpose === "all" || objective.importance === "core").map((objective) => objective.id);
-}
 
 export type Issue = { severity: "error" | "warning"; code: string; message: string; ref?: string };
 
@@ -262,10 +249,11 @@ export type GenState = {
   /** 실험: made from this run's cards, with only the 자료 전체 정리 done again (runner.remergeGen). */
   remergeOf?: string;
   /** v3: the knowledge map (① 전체 읽기), plan warnings and the gate's verdicts per question. */
-  v3?: { map?: import("./v3.ts").KnowledgeMap; warnings?: Issue[]; gate?: Array<{ objectiveId: string; attempt: number; passed: boolean; reasons: string[] }> };
-  astra?: import("./astra.ts").AstraState;
+  v3?: { map?: unknown; warnings?: Issue[]; gate?: Array<{ objectiveId: string; attempt: number; passed: boolean; reasons: string[] }> };
+  /** 예전 astra 엔진 실행의 상태(11/15 리팩토링에서 엔진은 지움, 옛 데이터 읽기용 자리만). */
+  astra?: unknown;
   recaller?: import("./recaller.ts").RecallerState;
-  pastExam?: { cacheKey: string; card: import("./pastexam.ts").VibeCard; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
+  pastExam?: { cacheKey: string; card: unknown; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
 };
 
 /** Where a fixed-prefix rerun starts: redo design+authoring, or authoring only (same objectives). */
@@ -376,29 +364,4 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
  */
 export type GenMark = { at: string; event: "start" | "outline" | "plan" | "confirm" | "confirmed" | "unit-start" | "unit-done" | "focus" | "done" | "stopped";
   sectionId?: string; page?: number; questions?: number; held?: number; note?: string };
-export type GenUnitState = "waiting" | "making" | "ready" | "held";
-export function genOutline(state: GenState) {
-  const confirmed = state.confirmedObjectiveIds ? new Set(state.confirmedObjectiveIds) : null;
-  return state.sections.map((section) => {
-    const objectives = (section.design?.objectives ?? []).filter((objective) => !confirmed || confirmed.has(objective.id));
-    const held = section.author?.dropped?.length ?? 0;
-    const unit: GenUnitState = section.author ? ((section.author.questionCount ?? 0) > 0 ? "ready" : "held")
-      : state.making?.includes(section.id) || state.current?.sectionId === section.id ? "making" : "waiting";
-    return { title: section.title, pages: section.pages, state: unit, held,
-      objectives: objectives.map((objective) => ({ id: objective.id, statement: objective.statement, cue: objective.cue, recall: objective.recall,
-        importance: objective.importance, kind: objective.kind, pages: objective.pages,
-        part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title })) };
-  });
-}
 
-/** The v3 knowledge map as plain text, for reader features that would otherwise read the pages again (용어 지도). */
-export function mapDigest(state: GenState, limit = 30000) {
-  const map = state.v3?.map;
-  if (!map?.concepts?.length) return "";
-  const lines = ["[지식 지도 — 자료를 통째로 읽고 뽑은 개념·관계]"];
-  for (const concept of map.concepts) {
-    lines.push(`- ${concept.name} (${concept.kind}, p.${concept.pages.join(",")}): ${concept.content}${concept.conditions.length ? ` / 조건: ${concept.conditions.join("; ")}` : ""}`);
-  }
-  for (const relation of map.relations ?? []) lines.push(`- [${relation.kind}] ${relation.statement}`);
-  return lines.join("\n").slice(0, limit);
-}

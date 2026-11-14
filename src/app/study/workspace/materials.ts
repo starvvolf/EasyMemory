@@ -3,7 +3,6 @@
 // 서버의 실행 목록(/api/lab/gen?origin=study)을 그대로 읽는다. 끝나지 않은 실행이 있으면 몇 초마다 다시 읽는다.
 import { useSyncExternalStore } from "react";
 import { call } from "./api";
-import { DEFAULT_GEN_MODELS } from "@/lib/study/gen/types";
 
 export type GenRun = {
   id: string; createdAt: string; status: string; fileName: string; sourceId?: string; pages: number[];
@@ -68,8 +67,8 @@ export function useMaking(): { making: Making[]; runs: GenRun[]; error: string; 
 }
 export const runOf = (genId: string) => state.runs.find((r) => r.id === genId) ?? null;
 
-/** PDF를 등록하고 기억 정리를 시작한다(엔진 recaller, 문제는 만들지 않음). 돌려주는 값은 새 실행 id. */
-export async function startMaterial(o: { file: File; from: number; to: number; note: string; readImages: boolean; lecture: boolean; deep: boolean; deepFast: boolean }): Promise<string> {
+/** PDF를 등록하고 기억 정리를 시작한다. 돌려주는 값은 새 실행 id. */
+export async function startMaterial(o: { file: File; from: number; to: number; note: string; lecture: boolean }): Promise<string> {
   const form = new FormData();
   form.append("pdf", o.file);
   const res = await fetch("/api/mcp-runs/sources", { method: "POST", body: form, cache: "no-store" });
@@ -77,9 +76,7 @@ export async function startMaterial(o: { file: File; from: number; to: number; n
   if (!res.ok || !reg.source) throw new Error(reg.message ?? "PDF를 등록하지 못했어요.");
   const pageNumbers = Array.from({ length: Math.max(1, o.to - o.from + 1) }, (_, i) => o.from + i);
   const { gen } = await call<{ gen: { id: string } }>("/api/lab/gen", {
-    sourceId: reg.source.id, fileName: o.file.name, pageNumbers, purpose: "core", note: o.note.slice(0, 2000), provider: "chatgpt", engine: "recaller", models: DEFAULT_GEN_MODELS,
-    origin: "study", readImages: o.readImages, questionsLater: true, ...(o.lecture ? { lecture: true } : {}),
-    ...(o.deep ? { deep: true, ...(o.deepFast ? { deepDrafts: 2 } : {}) } : {}), confirmed: true,
+    sourceId: reg.source.id, fileName: o.file.name, pageNumbers, note: o.note.slice(0, 2000), origin: "study", ...(o.lecture ? { lecture: true } : {}), confirmed: true,
   });
   await refreshMaterials();
   return gen.id;

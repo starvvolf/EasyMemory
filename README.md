@@ -22,9 +22,7 @@ Node.js 24, AI는 ChatGPT 계정 로그인. 키와 개인 학습자료는 이 �
 | `src/` | 앱(Next.js). 화면 `src/app/study`, API `src/app/api`, 기능 `src/lib` |
 | `desktop/` | Electron 앱(켜고 끄기) |
 | `experiments/project-course/` | 실습 코스 서버(4100)와 VS Code 확장 |
-| `extension/` | 크롬 확장(웹 글) |
 | `scripts/` | 앱 켜기·끄기·데이터 동기화·데이터 보관 |
-| `lab/` | 실험실: 실험 서버(엔진 3002, PS 3003), 문제 만들기·프롬프트 점검 실험, 실험 코드. 제품 흐름에는 없음 |
 | `tools/` | 개발 도구: 토큰 사용량·작업 현황(3091), 용량 보기(`space.mjs`), 데이터 보관하고 새로 시작, 에이전트 MCP |
 | `협업/`, `docs/` | 협업 문서, 결정·파이프라인 설명 |
 

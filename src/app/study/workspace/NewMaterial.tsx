@@ -1,6 +1,6 @@
 "use client";
 // 새 자료 넣기 — 바닐라(dejipgi-app.js renderBuilder)에서 React로 옮긴 첫 화면 (11/11 사용자 "옮기는 게 낫겠네" → "클라우드에서 진행해").
-// 하는 일은 그대로: PDF(또는 저장한 웹 글) 고르기 → 쪽 범위·목차에서 고르기 → 메모 → 그림·수식 읽기 · 강의 O/X · 심화 → [기억 정리 시작].
+// 하는 일: PDF(또는 저장한 웹 글) 고르기 → 쪽 범위·목차에서 고르기 → 메모 → 강의 O/X → [기억 정리 시작]. (11/15: 그림 읽기 · 심화 선택은 엔진이 쓰지 않아 뺐다)
 // 시작(엔진 호출 · 자료 목록에 넣기 · 자료 지도 열기)은 앱이 맡는다(onStart). ChatGPT 연결 안내는 앱이 이 화면 위에 그린다.
 import { useEffect, useRef, useState, type DragEvent } from "react";
 
@@ -15,7 +15,7 @@ type Pdfjs = { getDocument(o: { data: Uint8Array; isEvalSupported: boolean }): {
 type Page = { n: number; text: string };
 type Section = { title: string; start: number; end: number; level: number; fromOutline: boolean };
 export type StartOptions = {
-  file: File; from: number; to: number; note: string; readImages: boolean; lecture: boolean; deep: boolean; deepFast: boolean;
+  file: File; from: number; to: number; note: string; lecture: boolean;
 };
 type Props = {
   loadPdfjs: () => Promise<Pdfjs>;
@@ -63,10 +63,7 @@ export default function NewMaterial({ loadPdfjs, onStart }: Props) {
   const [from, setFrom] = useState(1);
   const [to, setTo] = useState(1);
   const [note, setNote] = useState("");
-  const [readImages, setReadImages] = useState(true);
   const [lecture, setLecture] = useState(false);
-  const [deep, setDeep] = useState(false);
-  const [deepFast, setDeepFast] = useState(false);
   const [webOpen, setWebOpen] = useState(false);
   const [webList, setWebList] = useState<WebSource[] | null>(null);
   const [over, setOver] = useState(false);
@@ -126,16 +123,13 @@ export default function NewMaterial({ loadPdfjs, onStart }: Props) {
     if (busy || !engineReady || !file) return;
     setBusy(true); setError(""); setStatus("PDF를 등록하고 기억 정리를 시작하는 중…");
     try {
-      await onStart({ file, from, to, note: note.trim(), readImages, lecture, deep, deepFast });
+      await onStart({ file, from, to, note: note.trim(), lecture });
     } catch (e) { setBusy(false); setStatus(""); setError((e as Error)?.message || "요청을 올리지 못했어요."); }
   };
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.name)) void readPdf(f); };
   const step = pages.length ? 2 : 1;
-  const empty = pages.filter((p) => !p.text.trim()).length;
   const span = to - from + 1;
-  // 엔진(pages.ts)과 같은 규칙: 글자가 모자란 쪽은 그림으로 읽는다(쪽당 약 20초, 3개씩).
-  const thin = pages.filter((p) => p.n >= from && p.n <= to && (p.text.match(/[\p{L}\p{N}]/gu) || []).length < 600).length;
   useEffect(() => { if (input.current) input.current.value = ""; }, [file]);
 
   return <div className="stack">
@@ -166,8 +160,7 @@ export default function NewMaterial({ loadPdfjs, onStart }: Props) {
     </section>
 
     {pages.length ? <section className="panel stack">
-      <div><p className="eyebrow">방향 정하기</p><h2 style={{ fontSize: 18, marginTop: 2 }}>어떻게 공부할지 알려 주세요</h2>
-        {empty && !readImages ? <p className="small muted">글자가 없는 쪽 {empty}개는 그림·스캔이라, 아래 ‘그림·수식도 읽기’를 켜야 기억에 들어가요.</p> : null}</div>
+      <div><p className="eyebrow">방향 정하기</p><h2 style={{ fontSize: 18, marginTop: 2 }}>어떻게 공부할지 알려 주세요</h2></div>
       <div className="field"><label>1. 범위</label>
         <div className="row"><span className="small muted">시작 쪽</span>
           <input type="number" min={1} max={pages.length} style={{ width: 90 }} value={from} onChange={(e) => setRange(Number(e.target.value), to)} />
@@ -185,22 +178,13 @@ export default function NewMaterial({ loadPdfjs, onStart }: Props) {
       </div>
       <div className="field"><label htmlFor="note">2. 메모 (선택)</label>
         <textarea id="note" rows={2} placeholder="예: 중간고사 범위, 공식은 직접 써 볼 수 있게, 영어 용어는 원문 그대로" value={note} onChange={(e) => setNote(e.target.value)} /></div>
-      {thin ? <label className="row small" style={{ gap: 8, cursor: "pointer" }}>
-        <input type="checkbox" checked={readImages} disabled={busy} onChange={(e) => setReadImages(e.target.checked)} />
-        <span><b>그림·수식도 읽기</b><span className="muted"> · 글자가 적은 {thin}쪽을 그림으로 읽어요 (약 {Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 기억에 들어가요.</span></span></label> : null}
       <div className="field"><label>강의도 준비할까요?</label>
         <div className="chat-sugs">{([[true, "O · 강의 들으며 공부"], [false, "X · 기억 카드만"]] as const).map(([on, label]) =>
           <button key={label} className="chip-btn" aria-pressed={lecture === on ? "true" : "false"} disabled={busy} onClick={() => setLecture(on)}>{label}</button>)}</div>
         <p className="small muted">{lecture ? "자료를 다 만들면 강사가 첫 영역부터 설명을 써 둬요. 다음 영역은 읽는 동안 이어서 써요." : "아는 내용이면 카드만 보고, 강의는 나중에 자료 지도의 [강의] 탭에서 언제든 들을 수 있어요."}</p></div>
-      <label className="row small" style={{ gap: 8, cursor: "pointer" }}>
-        <input type="checkbox" checked={deep} disabled={busy} onChange={(e) => setDeep(e.target.checked)} />
-        <span><b>심화 문제도 만들기</b><span className="muted"> · 개념 여러 개를 엮은 응용 문제와 단계별 풀이 (1~2분 더). 계산·절차가 있는 과목에 맞아요.</span></span></label>
-      {deep ? <label className="row small" style={{ gap: 8, cursor: "pointer", marginLeft: 24 }}>
-        <input type="checkbox" checked={deepFast} disabled={busy} onChange={(e) => setDeepFast(e.target.checked)} />
-        <span><b>심화 빠르게</b><span className="muted"> · 초안 두 개를 동시에 써서 먼저 통과한 것을 써요. 사용량이 두 배예요.</span></span></label> : null}
       <div className="row">
         <button className="btn primary" id="startBtn" disabled={busy || !engineReady} onClick={() => void start()}>기억 정리 시작</button>
-        <span className="small muted">바로 자료 지도로 넘어가요. 기억이 정리되는 대로 채워지고, 문제는 지도에서 원할 때 만들어요.</span>
+        <span className="small muted">바로 자료 지도로 넘어가요. 기억이 정리되는 대로 채워져요. 그림 · 수식이 있는 쪽은 그림도 같이 읽어요.</span>
       </div>
     </section> : null}
   </div>;

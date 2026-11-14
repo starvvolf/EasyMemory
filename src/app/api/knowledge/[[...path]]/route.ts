@@ -1,3 +1,4 @@
+import { importCardsOf } from "@/lib/study/knowledge";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
@@ -239,7 +240,7 @@ async function handle(request: Request, context: RouteContext) {
       return json(g);
     }
     // 핵심 카드만 지식으로 (10/30): 아직 지식이 아닌 보조 카드에서 "모름"을 누르면 그때 지식(몰랐음)이 된다.
-    if (p[0] === "ref-pick" && m === "POST") { const b = await body(z.object({ ref: z.string().min(1).max(200) })); return json(await pickWaiting(b.ref)); }
+    if (p[0] === "ref-pick" && m === "POST") { const b = await body(z.object({ ref: z.string().min(1).max(200) })); await importCardsOf([b.ref]); return json(await pickWaiting(b.ref)); }
     // 기억 탭 "모르는 것 분석"(11/13): 자료 하나의 카드 ref마다 기록 분석
     if (p[0] === "material-stats" && m === "POST") {
       const b = await body(z.object({ gen: z.string().regex(/^gen_[a-z0-9]{8,64}$/), refs: z.array(z.string().max(200)).max(2000) }));
@@ -248,6 +249,8 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "ref-event" && m === "POST") {
       const b = await body(z.object({ refs: z.array(z.string().max(200)).min(1).max(20), kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), material: z.string().max(200).optional(),
         takeBack: z.enum(["correct", "read"]).optional() }));
+      // [경계] A 11/15: 카드만 만든 자료는 카드가 아직 저장소에 없다 — 먼저 넣는다(src/lib/study/knowledge.ts importCardsOf).
+      if (!b.takeBack) await importCardsOf(b.refs);
       return json(await recordByRef(b.refs, b.kind, b.detail ?? "", b.material ? { kind: "pdf", title: b.material, ...(/^(gen_[a-z0-9]+)/.test(b.refs[0]) ? { ref: /^(gen_[a-z0-9]+)/.exec(b.refs[0])![1] } : {}) } : undefined, b.takeBack));
     }
     if (p[0] === "import" && m === "POST") {

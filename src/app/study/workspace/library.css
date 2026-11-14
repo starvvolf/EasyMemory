@@ -1,10 +1,7 @@
 /* 기억 도서관 (2026-11-11, Library.tsx): 왼쪽 목록 · 가운데 내용 · 아래 채팅. 둥근 상자, 실습 화면과 같은 결 */
 .dejipgi .lib{display:grid;grid-template-columns:minmax(220px,272px) minmax(0,1fr);gap:12px;min-height:420px}
 .dejipgi .lib-side{display:flex;flex-direction:column;gap:8px;min-height:0;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px}
-.dejipgi .lib-seg{display:flex;gap:4px;background:var(--surface-2);border-radius:999px;padding:3px}
-.dejipgi .lib-seg button{flex:1;border:0;background:none;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:6px 4px;border-radius:999px;cursor:pointer;display:inline-flex;justify-content:center;align-items:baseline;gap:4px}
-.dejipgi .lib-seg button small{font-size:11px;font-weight:500;color:var(--faint)}
-.dejipgi .lib-seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
 .dejipgi .lib-find{border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:7px 11px;font:inherit;font-size:13px;color:var(--ink);outline:none}
 .dejipgi .lib-find:focus{border-color:var(--accent);background:var(--surface)}
 .dejipgi .lib-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0 -4px;padding:0 4px}
@@ -29,24 +26,14 @@
 .dejipgi .lib-back{align-self:flex-start}
 .dejipgi .lib-welcome{margin:auto;display:grid;place-items:center;color:var(--line-strong);opacity:.9}
 
-.dejipgi .lib-stats{display:flex;gap:8px;flex-wrap:wrap}
-.dejipgi .lib-stats span{display:flex;flex-direction:column;align-items:center;min-width:76px;padding:8px 12px;border-radius:14px;background:var(--surface-2);font-size:12px;color:var(--muted)}
-.dejipgi .lib-stats b{font-size:18px;color:var(--ink);font-variant-numeric:tabular-nums}
 .dejipgi .lib-sec{display:flex;flex-direction:column;gap:8px}
 .dejipgi .lib-sec h3{margin:6px 0 0;font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.02em}
 .dejipgi .lib-sec p{margin:0;line-height:1.6}
 .dejipgi .lib-body{font-size:15px}
 .dejipgi .lib-k{display:inline-block;font-size:11.5px;font-weight:700;color:var(--accent);margin-right:7px}
 
-.dejipgi .lib-path{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.dejipgi .lib-path li{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--surface)}
-.dejipgi .lib-path li.ok{border-left:4px solid var(--good)}
-.dejipgi .lib-path li.skip{border-left:4px solid var(--line-strong)}
-.dejipgi .lib-path li.now{border-left:4px solid var(--accent)}
-.dejipgi .lib-pg{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dejipgi .lib-pg b{flex:1;min-width:0;font-weight:600;word-break:keep-all}
 .dejipgi .lib-dot{width:20px;height:20px;border-radius:50%;background:var(--surface-2);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
-.dejipgi .lib-sum{margin-top:6px !important;font-size:13.5px;color:var(--muted)}
+
 .dejipgi .lib-res{font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted);flex:none}
 .dejipgi .lib-res.ok{background:var(--good-soft);color:var(--good)}
 .dejipgi .lib-res.bad{background:var(--bad-soft);color:var(--bad)}
@@ -56,19 +43,8 @@
 .dejipgi .lib-tag.ok{background:var(--good-soft);color:var(--good)}
 .dejipgi .lib-tag.link{cursor:pointer;background:var(--accent-soft);color:var(--accent)}
 
-.dejipgi .lib-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
-.dejipgi .lib-card{border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px;font-size:13.5px}
-.dejipgi .lib-card header{display:flex;align-items:center;gap:8px}
-.dejipgi .lib-card header b{flex:1;font-size:14.5px}
-.dejipgi .lib-card blockquote{margin:0;padding:6px 10px;border-left:3px solid var(--line-strong);color:var(--muted);font-size:13px;background:var(--surface);border-radius:0 10px 10px 0}
-.dejipgi .lib-how{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--help-soft);color:var(--help)}
-.dejipgi .lib-how.ok{background:var(--good-soft);color:var(--good)}
-.dejipgi .lib-how.bad{background:var(--bad-soft);color:var(--bad)}
+.dejipgi .lib-chunks,.dejipgi .lib-plain {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 
-.dejipgi .lib-moments,.dejipgi .lib-chunks,.dejipgi .lib-plain{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.dejipgi .lib-moments li{border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
-.dejipgi .lib-moments code{font-family:var(--mono);font-size:12.5px}
-.dejipgi .lib-err{font-family:var(--mono);font-size:12px;color:var(--bad);background:var(--bad-soft);border-radius:10px;padding:6px 10px}
 .dejipgi .lib-diff{margin:0;font-family:var(--mono);font-size:12px;background:var(--surface-2);border-radius:10px;padding:8px 10px;overflow-x:auto;white-space:pre}
 .dejipgi .lib-chunks li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line)}
 .dejipgi .lib-plain li{line-height:1.55;font-size:13.5px}
@@ -106,7 +82,7 @@
 .dejipgi .rp-ch{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:14px 16px;background:var(--surface)}
 .dejipgi .rp-chh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .dejipgi .rp-chh b{flex:1;min-width:0;font-size:15.5px;word-break:keep-all}
-.dejipgi .rp-sum{margin:0;padding:8px 12px;border-radius:12px;background:var(--accent-soft);font-size:13.5px;line-height:1.6}
+
 .dejipgi .rp-feed{display:flex;flex-direction:column;gap:8px;padding:4px 2px}
 .dejipgi .rp-row{display:flex;align-items:flex-end;gap:8px}
 .dejipgi .rp-row.me{justify-content:flex-end}
@@ -132,23 +108,13 @@
 .dejipgi .rp-cmd.bad span{color:#ff8c78}
 .dejipgi .rp-cmd pre{width:100%;margin:0;font-family:var(--mono);font-size:12px;color:#ffb3a6;white-space:pre-wrap}
 .dejipgi .rp-save{display:flex;flex-direction:column;gap:4px}
-.dejipgi .rp-moment{margin:0;padding:8px 12px;border-radius:12px;background:var(--help-soft);font-size:13px}
-.dejipgi .rp-moment code{font-family:var(--mono);font-size:12px}
-.dejipgi .rp-left{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--line);padding-top:10px}
-.dejipgi .rp-note{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:8px 12px;border-radius:12px;background:var(--surface-2);font-size:13px}
-.dejipgi .rp-note b{font-size:13.5px}
-.dejipgi .rp-note p{width:100%;margin:0;line-height:1.55}
+
 .dejipgi .rp-tags{display:flex;gap:6px;flex-wrap:wrap}
 .dejipgi .rp-wrong{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:var(--surface-2)}
 .dejipgi .rp-wrong p{margin:0;line-height:1.6}
 .dejipgi .lib-k.bad{color:var(--bad)}
 .dejipgi .lib-k.ok{color:var(--good)}
-.dejipgi .rp-steps{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:8px}
-.dejipgi .rp-steps li{position:relative;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:13.5px}
-.dejipgi .rp-steps li::before{content:"";position:absolute;left:-20px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--line-strong)}
-.dejipgi .rp-steps li.ok::before{background:var(--good)}
-.dejipgi .rp-steps li.bad::before{background:var(--bad)}
-.dejipgi .rp-steps li p{width:100%;margin:0}
+
 .dejipgi .rp-rich p{margin:0 0 4px}
 .dejipgi .rp-rich .ws-code{margin:4px 0;font-size:12px;border-radius:10px}
 .dejipgi .rp-b.me .rp-rich .ws-code{background:rgba(0,0,0,.18);color:inherit}
@@ -197,104 +163,33 @@
 .dejipgi .rp-step.ok::before{background:var(--good)} .dejipgi .rp-step.bad::before{background:var(--bad)}
 .dejipgi .rp-step p{flex-basis:100%;margin:2px 0 0}
 .dejipgi .rp-talk{display:flex;flex-direction:column;gap:6px}
-.dejipgi .rp-tk{display:flex;align-items:baseline;gap:8px;margin:0}
+
 .dejipgi .rp-code summary{cursor:pointer}
 .dejipgi .rp-flow>.rp-subs{margin:0;padding:0;list-style:none}
 
 /* 한눈에 보기(11/12): 장면마다 한 줄, 마우스를 올리면 상세, 누르면 장면 전체의 그 자리 */
 .dejipgi .fl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.dejipgi .fl-ch{border:1px solid var(--line);border-radius:16px;padding:10px 12px;background:var(--surface)}
-.dejipgi .fl-goal{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dejipgi .fl-goal b{flex:1;min-width:0;font-size:14.5px;word-break:keep-all}
-.dejipgi .fl-sum{margin:6px 0 2px 28px;font-size:12.5px;color:var(--muted);line-height:1.55}
-.dejipgi .fl-beats{list-style:none;margin:6px 0 0 9px;padding:0 0 0 14px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:1px}
-.dejipgi .fl-b{position:relative;width:100%;display:flex;align-items:flex-start;gap:7px;padding:4px 8px;border:0;border-radius:10px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.dejipgi .fl-b:hover,.dejipgi .fl-b:focus-visible{background:var(--surface-2);outline:none}
-.dejipgi .fl-b.static{cursor:default}
-.dejipgi .fl-t{font-size:11px;color:var(--faint);width:36px;flex:none;line-height:20px;font-variant-numeric:tabular-nums}
-.dejipgi .fl-i{font-size:13px;line-height:20px;flex:none}
-.dejipgi .fl-x{display:flex;flex-direction:column;min-width:0;font-size:13.5px;line-height:20px}
-.dejipgi .fl-x > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dejipgi .fl-x small{font-size:12px;color:var(--muted);line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dejipgi .fl-b.ask .fl-x > span{font-weight:600}
-.dejipgi .fl-b.ok .fl-x > span{color:var(--good);font-weight:600}
-.dejipgi .fl-b.bad .fl-x > span{color:var(--bad);font-weight:600}
-.dejipgi .fl-b.help .fl-x > span{color:var(--help);font-weight:600}
-.dejipgi .fl-tip{display:none;position:absolute;left:52px;top:100%;z-index:20;width:min(520px,80vw);max-height:280px;overflow:auto;white-space:pre-wrap;
-  background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,.14);font-weight:400}
-.dejipgi .fl-b:hover .fl-tip,.dejipgi .fl-b:focus-visible .fl-tip,.dejipgi .fl-card:hover .fl-tip,.dejipgi .fl-card:focus .fl-tip{display:block}
-.dejipgi .fl-left{margin:8px 0 0 28px;font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.dejipgi .fl-card{position:relative;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600;cursor:default}
-.dejipgi .fl-card .fl-tip{left:0}
+
 .dejipgi .rp-tog{width:100%;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:0}
-.dejipgi .rp-hl{border-radius:14px;box-shadow:0 0 0 3px var(--accent-soft);background:var(--accent-soft);transition:background .4s}
 
 /* 실습 일지(11/12, AI가 저장할 때 쓴 것) */
-.dejipgi .dy-line{margin:0;padding:12px 16px;border-radius:14px;background:var(--accent-soft);font-size:15px;font-weight:600;line-height:1.55}
-.dejipgi .dy-story{list-style:none;margin:2px 0 0 10px;padding:0 0 0 16px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:2px}
-.dejipgi .dy-story li{position:relative}
-.dejipgi .dy-story li::before{content:"";position:absolute;left:-24px;top:12px;width:10px;height:10px;border-radius:50%;background:var(--line-strong);border:2px solid var(--surface)}
-.dejipgi .dy-story li.goal::before{background:var(--accent)}
-.dejipgi .dy-story li.turn::before{background:var(--help)}
-.dejipgi .dy-story li.bad::before{background:var(--bad)}
-.dejipgi .dy-story li.ok::before{background:var(--good)}
-.dejipgi .dy-story li.help::before{background:var(--help)}
-.dejipgi .dy-b{position:relative;width:100%;display:flex;align-items:baseline;gap:10px;padding:6px 10px;border:0;border-radius:10px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.dejipgi .dy-b:hover,.dejipgi .dy-b:focus-visible{background:var(--surface-2);outline:none}
-.dejipgi .dy-b.static{cursor:default}
-.dejipgi .dy-b:hover .fl-tip,.dejipgi .dy-b:focus-visible .fl-tip{display:block}
-.dejipgi .dy-tag{flex:none;font-size:12px;font-weight:700;color:var(--muted);min-width:66px}
-.dejipgi .goal .dy-tag{color:var(--accent)}
-.dejipgi .turn .dy-tag,.dejipgi .help .dy-tag{color:var(--help)}
-.dejipgi .bad .dy-tag{color:var(--bad)}
-.dejipgi .ok .dy-tag{color:var(--good)}
-.dejipgi .dy-text{font-size:14px;line-height:1.55}
-.dejipgi .dy-left{margin:4px 0 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)}
-.dejipgi .dy-left span{padding:2px 10px;border-radius:999px;background:var(--help-soft);color:var(--help);font-weight:600}
+
 /* 푼 과정의 AI 대화 한 줄(11/12 B): 다른 줄과 같은 모양, 점은 강조색, 원문은 접어 둠 */
 .dejipgi .rp-step.talk::before{background:var(--accent)}
 .dejipgi .rp-step.talk > details{flex-basis:100%}
 /* 11/12: 이 실습은(intro) · 판이 바뀐 것(점 없는 둥근 상자) · 배운 일(무엇을 하던 중 + 무엇을 어떻게) */
-.dejipgi .dy-intro{margin:0;font-size:14px;line-height:1.65;color:var(--ink)}
-.dejipgi .dy-story li.sys::before{display:none}
-.dejipgi .dy-story li.sys{margin:6px 0 4px -26px}
-.dejipgi .dy-sys{display:inline-flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:7px 14px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--surface);font-size:13.5px;line-height:1.5}
-.dejipgi .dy-sys b{font-size:12.5px;white-space:nowrap}
-.dejipgi .sys.goal .dy-sys{border-color:var(--accent);background:var(--accent-soft)}
-.dejipgi .sys.goal .dy-sys b{color:var(--accent)}
-.dejipgi .sys.turn .dy-sys,.dejipgi .sys.sup .dy-sys{border-color:var(--help);background:var(--help-soft)}
-.dejipgi .sys.turn .dy-sys b,.dejipgi .sys.sup .dy-sys b{color:var(--help)}
-.dejipgi .dy-story li.sys .dy-b{padding:2px 0}
-.dejipgi .dy-story li.sys .dy-b:hover{background:none}
-.dejipgi .dy-story li.sys .dy-b:hover .dy-sys{box-shadow:0 0 0 3px var(--surface-2)}
-.dejipgi .dy-body{display:flex;flex-direction:column;min-width:0}
-.dejipgi .dy-doing{font-size:11.5px;color:var(--muted);line-height:1.4}
-.dejipgi .rp-miss{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px;line-height:1.6}
+
 .dejipgi .rp-review{gap:12px}
 .dejipgi .rp-review > div > .lib-k{display:block;margin-bottom:2px}
-.dejipgi .rp-review .rp-miss{gap:8px}
-.dejipgi .rp-review .rp-truth{color:var(--muted)}
+
 /* 총정리 상자(11/12 B, "가독성 좋게 박스"): 칸마다 카드, 왼쪽 색 띠, 위에 사실 한 줄 */
 .dejipgi .rp-review{gap:10px}
 .dejipgi .rp-facts{display:flex;flex-wrap:wrap;gap:6px;margin:0}
 .dejipgi .rp-facts span{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
-.dejipgi .rp-card{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:4px}
-.dejipgi .rp-card.ok{border-left-color:var(--good)}
-.dejipgi .rp-card.bad{border-left-color:var(--bad)}
-.dejipgi .rp-card p{margin:0;line-height:1.65}
-.dejipgi .rp-h{font-size:12.5px;color:var(--accent)}
-.dejipgi .rp-h.bad{color:var(--bad)}
-.dejipgi .rp-card.ok .rp-h{color:var(--good)}
-.dejipgi .rp-review .rp-miss{margin:2px 0 0;padding-left:20px;gap:8px}
-.dejipgi .rp-truth{color:var(--muted)}
-.dejipgi .rp-truth span{font-size:11.5px;font-weight:700;color:var(--good);margin-right:6px}
-.dejipgi .rp-weak{margin:2px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
-.dejipgi .rp-weak li{display:flex;flex-direction:column;line-height:1.55}
+
 /* 실습 총정리 목표마다 한 칸(11/12) */
 .dejipgi .pg-goal{display:flex;flex-direction:column;gap:6px}
 .dejipgi .pg-gh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14.5px;color:var(--ink)}
-.dejipgi .pg-sub{margin:4px 0 0 !important;font-size:12px;font-weight:700;color:var(--muted)}
-.dejipgi .pg-sub.bad{color:var(--bad)}
 
 /* 실습 총정리 다시 그림(11/12 사용자 "디자인 마음에 안 들어 · '사실은' 별로 · 회색/검정 구분 안 감 · 묶을 건 박스"):
    목표 = 테두리 있는 큰 상자, 문제 하나 = 안쪽 작은 상자(위: 그때 한 일, 아래: → 왜 · 어떻게, 색 다르게), 부족한 점 = 빨간 상자 */
@@ -303,23 +198,11 @@
 .dejipgi .pg-gh b{flex:1;min-width:0;font-size:15.5px;color:var(--ink);word-break:keep-all}
 .dejipgi .pg-n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .dejipgi .pg-sit{margin:0;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:var(--ink);font-size:14px;line-height:1.65}
-.dejipgi .pg-probs{display:flex;flex-direction:column;gap:8px}
-.dejipgi .pg-prob{border-radius:14px;border:1px solid var(--line);overflow:hidden}
-.dejipgi .pg-what{margin:0;padding:10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--ink);background:var(--surface-2)}
-.dejipgi .pg-ico{flex:none}
-.dejipgi .pg-fix{margin:0;padding:10px 12px 10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--good);background:var(--good-soft);font-weight:500}
-.dejipgi .pg-arrow{flex:none;font-weight:800}
+
 .dejipgi .pg-none{margin:0;font-size:13px;color:var(--muted)}
-.dejipgi .pg-weak{border-radius:14px;border:1.5px solid var(--bad);background:var(--bad-soft);padding:10px 14px}
-.dejipgi .pg-wh{margin:0 0 6px;font-size:12.5px;font-weight:800;color:var(--bad)}
-.dejipgi .pg-weak ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
-.dejipgi .pg-weak li{display:flex;flex-direction:column;gap:2px}
-.dejipgi .pg-weak li b{font-size:14px;color:var(--ink)}
-.dejipgi .pg-weak li span{font-size:13px;color:var(--bad)}
+
 /* 실습 정리 v2(11/12): 장면 = 물음 제목 + 이어진 글, 여기까지(초록 줄), 판 바뀜 = 칸 사이 둥근 줄 */
-.dejipgi .pg-q{margin:0;padding:10px 12px 4px;font-size:14px;font-weight:700;color:var(--ink);background:var(--surface-2)}
-.dejipgi .pg-body{margin:0;padding:0 12px 11px;font-size:14px;line-height:1.7;color:var(--ink);background:var(--surface-2)}
-.dejipgi .pg-reach{margin:0;display:flex;gap:8px;padding:9px 12px;border-radius:12px;background:var(--good-soft);color:var(--good);font-size:14px;font-weight:600;line-height:1.55}
+
 .dejipgi .pg-shift{align-self:flex-start;margin:10px 0 0 12px;display:inline-flex;align-items:baseline;gap:8px;padding:6px 14px;border-radius:999px;border:1.5px dashed var(--line-strong);font-size:13px;font-weight:600;color:var(--muted);background:var(--surface)}
 .dejipgi .pg-shift small{font-weight:400;color:var(--faint);font-size:11px}
 .dejipgi .pg-shift.goal{border-color:var(--accent);color:var(--accent)}
@@ -337,57 +220,27 @@
 .dejipgi .pg-cl{display:block;padding:3px 12px;font-size:11px;font-weight:700;color:var(--muted);background:var(--surface)}
 .dejipgi .pg-demo{margin-top:8px;border:1.5px solid var(--line-strong);border-radius:16px;padding:10px 4px 2px;background:var(--surface)}
 .dejipgi .pg-dh{margin:0 12px 8px;font-size:14px;font-weight:700}
-.dejipgi .pg-prob{background:var(--surface-2)}
+
 /* 부족한 점(11/12 B, 사용자 "구분감이 너무 없고… 두 개씩 묶어서 봐야 되는데"): 번호 + 굵은 한 줄, 그 밑에 장면마다 한 묶음 상자 —
    위 칸 "그때 내 생각"(빨강 바탕) · 아래 칸 "맞는 생각"(초록 바탕) */
-.dejipgi .rp-weak{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:14px}
-.dejipgi .rp-weak > li{display:flex;flex-direction:column;gap:8px}
-.dejipgi .rp-gap{margin:0;display:flex;gap:8px;align-items:baseline;font-weight:700;font-size:14.5px;line-height:1.5;color:var(--ink)}
-.dejipgi .rp-num{flex:none;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--bad);color:var(--surface);font-size:11.5px;font-weight:700;transform:translateY(-1px)}
-.dejipgi .rp-pair{margin-left:28px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.dejipgi .rp-pair > div{padding:8px 12px;display:flex;flex-direction:column;gap:2px}
-.dejipgi .rp-pair p{margin:0;line-height:1.6;font-size:13.5px;color:var(--ink)}
-.dejipgi .rp-pair .when{background:var(--surface)}
-.dejipgi .rp-pair .mine{background:color-mix(in srgb, var(--bad-soft) 55%, var(--surface));border-top:1px solid var(--line)}
-.dejipgi .rp-pair .right{background:color-mix(in srgb, var(--good-soft) 55%, var(--surface));border-top:1px solid var(--line)}
-.dejipgi .rp-pair .when .rp-tag{color:var(--muted)}
-.dejipgi .rp-pair > div:first-child{border-top:0}
-.dejipgi .rp-tag{font-size:11.5px;font-weight:700}
-.dejipgi .rp-pair .mine .rp-tag{color:var(--bad)}
-.dejipgi .rp-pair .right .rp-tag{color:var(--good)}
+
 /* 해설 · 바르게(11/12) */
-.dejipgi .pg-explain{margin:2px 12px 12px;border-radius:12px;border:1.5px solid var(--good);background:var(--good-soft);padding:10px 0 2px}
-.dejipgi .pg-eh{margin:0 12px 4px;font-size:12.5px;font-weight:800;color:var(--good)}
-.dejipgi .pg-et{margin:0 12px 10px;font-size:14px;line-height:1.7;color:var(--ink)}
-.dejipgi .pg-explain .pg-code{margin:0 10px 10px}
+
 .dejipgi .pg-code.ok pre{background:#13231c;color:#cdeedd}
 .dejipgi .pg-code.out.ok pre{background:#0f1a15;color:#9fe0bf}
-.dejipgi .pg-explain{padding:10px 14px 12px}
-.dejipgi .pg-explain .pg-eh,.dejipgi .pg-explain .pg-et{margin-left:0;margin-right:0;padding:0}
-.dejipgi .pg-explain .pg-et{margin-bottom:0}
+
 /* 빈틈 카드(11/12 B v8, 사용자 "부족함을 정확하게… 처음 보는 사람이 봐도 뭐가 부족해서 뭘 해야 되는지"): 색 바탕 대신 흰 카드 + 왼쪽 띠 + 종류 칩.
    칸 이름(어디서 드러났나 · 알아야 하는 것 · 이렇게 채워요)은 왼쪽 열, 글은 오른쪽 열 */
-.dejipgi .rp-gaps{display:flex;flex-direction:column;gap:10px}
-.dejipgi .rp-gapcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
-.dejipgi .rp-gapcard.core{border-left-color:var(--bad)}
-.dejipgi .rp-gapcard.build{border-left-color:var(--help)}
-.dejipgi .rp-gapcard.edge{border-left-color:var(--read)}
-.dejipgi .rp-gapcard.syntax{border-left-color:var(--ask)}
-.dejipgi .rp-gapcard .rp-gap{margin:0;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-weight:700;font-size:15px;line-height:1.5}
-.dejipgi .rp-kind{flex:none;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid currentColor}
-.dejipgi .rp-kind.core{color:var(--bad)} .dejipgi .rp-kind.build{color:var(--help)} .dejipgi .rp-kind.edge{color:var(--read)} .dejipgi .rp-kind.syntax{color:var(--ask)}
-.dejipgi .rp-row2{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px;align-items:baseline}
-.dejipgi .rp-row2 p{margin:0;line-height:1.65;font-size:13.5px;color:var(--ink)}
-.dejipgi .rp-row2 .rp-tag{font-size:12px;font-weight:700;color:var(--muted)}
-.dejipgi .rp-row2.fill .rp-tag{color:var(--good)}
-@media (max-width:700px){ .dejipgi .rp-row2{grid-template-columns:minmax(0,1fr);gap:2px} }
+
+   
+
 /* 총정리 다시(11/12 B, 사용자 "가독성이 구려… 읽기 좋게 정리가 안 됨"): 글 폭 72자 안팎, 글자 15px·줄 간격 1.75,
    제목은 작은 머리말, 문장마다 한 줄, 빈틈은 접는 목록, "이렇게 채워요"만 색 상자 */
 .dejipgi .rp-review2{display:flex;flex-direction:column;gap:22px;padding:22px 26px;border-radius:16px;border:1px solid var(--line);background:var(--surface)}
 .dejipgi .rp-review2 > *{max-width:860px}
 .dejipgi .rv-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .dejipgi .rv-head b{font-size:17px}
-.dejipgi .rv-facts{font-size:12.5px;color:var(--muted)}
+
 .dejipgi .rp-review2 h4{margin:0 0 6px;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:var(--muted)}
 .dejipgi .rp-review2 h5{margin:0 0 4px;font-size:12px;font-weight:700;color:var(--muted)}
 .dejipgi .rv-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;max-width:none}
@@ -409,62 +262,23 @@
 .dejipgi .rv-body{display:flex;flex-direction:column;gap:14px;padding:2px 16px 16px 48px}
 .dejipgi .rv-fill{padding:10px 14px;border-radius:10px;background:color-mix(in srgb, var(--good-soft) 70%, var(--surface))}
 .dejipgi .rv-fill h5{color:var(--good)}
-.dejipgi .rv-next{padding-top:4px;border-top:1px solid var(--line)}
+
 /* 총정리 이야기(11/12 B v9, 사용자 "메인 스토리를 가져가면서 그 사이에 박스로… 그 자체로 공부가 되게"):
    왼쪽 세로줄 + 번호, 한 일(본문) → 사실은(본문, 조금 흐리게) → 비어 있던 것(빨간 표시) → 짚고 가기 상자(목록 + 손으로 따라 볼 예) */
-.dejipgi .rv-beats{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:0}
-.dejipgi .rv-beat{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr);gap:14px;padding-bottom:26px}
-.dejipgi .rv-beat::before{content:"";position:absolute;left:14px;top:30px;bottom:4px;width:2px;background:var(--line)}
-.dejipgi .rv-beat:last-child{padding-bottom:4px}
-.dejipgi .rv-beat:last-child::before{display:none}
-.dejipgi .rv-dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--surface-2);border:1.5px solid var(--line-strong);color:var(--ink)}
-.dejipgi .rv-beat.core .rv-dot{border-color:var(--bad);color:var(--bad)}
-.dejipgi .rv-beatbody{display:flex;flex-direction:column;gap:10px;min-width:0;padding-top:3px}
-.dejipgi .rv-did{margin:0;font-size:15.5px;line-height:1.8;color:var(--ink)}
-.dejipgi .rv-truth{margin:0;font-size:15px;line-height:1.8;color:var(--ink);opacity:.86}
-.dejipgi .rv-gapline{margin:0;font-size:14.5px;line-height:1.6;font-weight:700;color:var(--ink);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-.dejipgi .rv-gapline .rv-gaplabel{font-size:11.5px;font-weight:700;color:var(--bad);border:1px solid var(--bad);border-radius:999px;padding:0 8px;white-space:nowrap}
-.dejipgi .rv-box{margin-top:2px;padding:14px 18px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
-.dejipgi .rv-boxeye{margin:0;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--accent)}
-.dejipgi .rv-boxtitle{margin:0;font-size:16px;font-weight:700;color:var(--ink)}
-.dejipgi .rv-points{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
-.dejipgi .rv-points li{font-size:14.5px;line-height:1.7;color:var(--ink)}
-.dejipgi .rv-example{margin:4px 0 0;padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--line);font-family:var(--mono, ui-monospace, monospace);font-size:13.5px;line-height:1.65;white-space:pre-wrap;overflow-x:auto;color:var(--ink)}
+
 .dejipgi .rv-ic{font-family:var(--mono, ui-monospace, monospace);font-size:.9em;padding:1px 5px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line)}
 /* 총정리 이야기 카드(11/12 B, 사용자 "색깔이랑 박스, 글자 색깔을 잘 써서 구분감 있게… 카드 느낌이 아니라 보고서 쓴 느낌"):
    마디마다 그림자 있는 카드. 칸마다 바탕색이 다르다: 한 일(흰) · 사실은(파랑 바탕) · 비어 있던 것(빨강 바탕, 굵게) ·
    짚고 가기(보라 머리띠 + 연보라 바탕, 체크 목록, 어두운 코드 판). 종류는 꽉 찬 칩. */
-.dejipgi .rv-beat{grid-template-columns:34px minmax(0,1fr);gap:14px;padding-bottom:22px}
-.dejipgi .rv-beat::before{left:16px;top:36px}
-.dejipgi .rv-dot{width:34px;height:34px;font-size:14px;background:var(--accent);border:0;color:var(--surface);box-shadow:0 2px 6px rgba(0,0,0,.15)}
-.dejipgi .rv-beat.core .rv-dot{background:var(--bad)} .dejipgi .rv-beat.build .rv-dot{background:var(--help)}
-.dejipgi .rv-beat.edge .rv-dot{background:var(--read)} .dejipgi .rv-beat.syntax .rv-dot{background:var(--ask)}
-.dejipgi .rv-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden;display:flex;flex-direction:column}
-.dejipgi .rv-cardhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--surface-2)}
-.dejipgi .rv-cardtitle{font-size:16px;font-weight:800;color:var(--ink)}
+
+ 
+ 
+
 .dejipgi .rv-chip{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;color:var(--surface);background:var(--accent)}
 .dejipgi .rv-chip.core{background:var(--bad)} .dejipgi .rv-chip.build{background:var(--help)} .dejipgi .rv-chip.edge{background:var(--read)} .dejipgi .rv-chip.syntax{background:var(--ask)}
-.dejipgi .rv-sec{padding:12px 18px;display:flex;flex-direction:column;gap:4px}
-.dejipgi .rv-sec p{margin:0;font-size:15px;line-height:1.75;color:var(--ink)}
+
 .dejipgi .rv-lab{font-size:12px;font-weight:800;letter-spacing:.02em}
-.dejipgi .rv-sec.did .rv-lab{color:var(--muted)}
-.dejipgi .rv-sec.truth{background:var(--read-soft);border-left:4px solid var(--read)}
-.dejipgi .rv-sec.truth .rv-lab{color:var(--read)}
-.dejipgi .rv-sec.gap{background:var(--bad-soft);border-left:4px solid var(--bad)}
-.dejipgi .rv-sec.gap .rv-lab{color:var(--bad)}
-.dejipgi .rv-sec.gap p{font-weight:700}
-.dejipgi .rv-study{margin:14px 18px 18px;border-radius:14px;border:1.5px solid var(--ask);overflow:hidden;background:var(--ask-soft)}
-.dejipgi .rv-studyhead{display:flex;align-items:baseline;gap:8px;padding:9px 14px;background:var(--ask);color:var(--surface);font-size:12.5px;font-weight:800}
-.dejipgi .rv-studyhead b{font-size:14.5px;font-weight:800;margin-left:4px}
-.dejipgi .rv-studybody{padding:12px 16px 14px;display:flex;flex-direction:column;gap:10px}
-.dejipgi .rv-checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.dejipgi .rv-checks li{position:relative;padding-left:24px;font-size:14.5px;line-height:1.65;color:var(--ink)}
-.dejipgi .rv-checks li::before{content:"✓";position:absolute;left:2px;top:0;color:var(--ask);font-weight:800}
-.dejipgi .rv-code{border-radius:10px;overflow:hidden;background:#1d2029;border:1px solid #2c303b}
-.dejipgi .rv-codelab{display:block;padding:5px 12px;font-size:11px;font-weight:700;color:#9aa3b2;background:#252935;border-bottom:1px solid #2c303b}
-.dejipgi .rv-code pre{margin:0;padding:10px 12px;font-family:var(--mono, ui-monospace, monospace);font-size:13.5px;line-height:1.65;color:#e8eaf0;white-space:pre-wrap;overflow-x:auto}
-.dejipgi .rv-card .rv-ic{background:color-mix(in srgb, var(--ink) 8%, transparent);border-color:transparent}
-.dejipgi .rv-beat.core .rv-dot,.dejipgi .rv-beat.build .rv-dot,.dejipgi .rv-beat.edge .rv-dot,.dejipgi .rv-beat.syntax .rv-dot{color:var(--surface);border:0}
+
 /* 총정리 머리·도입 카드(11/12 B, 사용자 "문제 상황이랑 이렇게 해야 풀려요도… 총정리도 제목 느낌 나게… 색깔로 구분할 수 있는 건 구분"):
    제목 줄(작은 머리말 + 큰 제목 + 아래 줄), 사실은 색 칩, 문제 상황 = 파랑 카드, 이렇게 해야 풀려요 = 초록 카드, 다음에 떠올릴 것 = 주황 카드 */
 .dejipgi .rp-review2 .rv-head{display:flex;flex-direction:column;gap:10px;padding-bottom:14px;border-bottom:2px solid var(--accent)}
@@ -491,18 +305,11 @@
 .dejipgi .rv-sectitle span{font-size:12.5px;font-weight:700;color:var(--muted)}
 .dejipgi .rp-review2 > .rv-story{max-width:none}
 /* v12 발상 · 구현 · 문법(11/12): 발상 파랑 · 구현 주황 · 문법 보라 */
-.dejipgi .rv-beat.idea .rv-dot{background:var(--accent)} .dejipgi .rv-beat.impl .rv-dot{background:var(--help)}
-.dejipgi .rv-beat.idea .rv-dot,.dejipgi .rv-beat.impl .rv-dot{color:var(--surface);border:0}
+ 
+
 .dejipgi .rv-chip.idea{background:var(--accent)} .dejipgi .rv-chip.impl{background:var(--help)}
-.dejipgi .rv-beat.syntax .rv-card{margin-left:22px}
 
 /* 구현·문법 마디: 그때 내 코드 → 이렇게 고쳐요 (11/12 v13) */
-.dejipgi .rv-diff{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:2px 0 4px}
-.dejipgi .rv-diff .rv-code{min-width:0;margin:0}
-.dejipgi .rv-code.was .rv-codelab{color:#ffb4a6;background:#3a2326;border-bottom-color:#4a2c30}
-.dejipgi .rv-code.was{border-color:#4a2c30}
-.dejipgi .rv-code.fix .rv-codelab{color:#9fe3bf;background:#1d3328;border-bottom-color:#264537}
-.dejipgi .rv-code.fix{border-color:#264537}
 
 /* 총정리 v14: 이야기 흐름 + 약점 상자 (11/12) */
 .dejipgi .rv-flow{list-style:none;margin:0;padding:0 0 0 18px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:16px}

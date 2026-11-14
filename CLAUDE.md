@@ -29,7 +29,7 @@
 
 | 영역 | 주인 | 폴더 (자세히는 그 폴더의 CLAUDE.md) |
 |---|---|---|
-| 총괄 · 앱 구조 · 자료 엔진 (PDF·자료 지도·문제) | A | 공부 화면(`src/app/study/`, `StudyApp.tsx`·`dejipgi-app.js`), `src/lib/study/`(엔진 `gen/`·자료 지도·강의·문제), `src/app/lab/`, `src/app/api/lab/`, `src/app/api/study-map/`, 켜고 끄기(`scripts/`, `desktop/`), `tools/` |
+| 총괄 · 앱 구조 · 자료 엔진 (PDF·자료 지도·기억 카드) | A | 공부 화면(`src/app/study/`, 틀 `StudyShell.tsx`), `src/lib/study/`(엔진 `gen/`·자료 지도·강의), `src/app/api/lab/gen/`, `src/app/api/study-map/`, 켜고 끄기(`scripts/`, `desktop/`), `tools/` |
 | 알고리즘 (PS 튜터, 안쪽 이름 code) | B | `src/lib/code/`, `src/lib/assist/code-ai.ts`, `src/app/api/code/`, `workspace/CodeStudy.tsx`·`PsTutor.tsx` 등 |
 | 실습 (안쪽 이름 project) | D | `experiments/project-course/`, `workspace/ProjectStudy.tsx`·`ProjectStudio.tsx`, `src/app/api/project-course/` |
 | 기억 저장소 바닥 (저장·불러오기 약속, 복습 날짜, 같은 기억 합치기, 기억 탭·오늘 복습 화면 틀) | A | `src/lib/knowledge/`, `src/lib/assist/knowledge-ai.ts`, `src/app/api/knowledge/`, `workspace/Knowledge*.tsx`, `TodayBoard.tsx` |
@@ -57,7 +57,7 @@
 - 공개 저장소다: 강의 자료·문제 원문·블로그 글·`.env*`·키·ChatGPT 인증을 커밋하지 않는다.
 - 3000번 서버를 묻지 않고 끄거나 재시작하지 않는다. Recaller 앱 창을 닫지 않는다(닫으면 서버가 꺼지고 데이터가 올라간다). `.env.local`을 바꾸지 않는다.
 - 데이터 폴더를 지우지 않는다. 비울 때는 `scripts/recaller-data.mjs archive`(보관 후 비우기)로 하고, 사용자에게 먼저 묻는다.
-- 건드리지 않는 것: `codex/engine-astra` 쪽 파일, `.pnpm-store/`, `pnpm-workspace.yaml`, `desktop/package-lock.json`.
+- 건드리지 않는 것: `.pnpm-store/`, `pnpm-workspace.yaml`, `desktop/package-lock.json`. (astra 엔진 갈래는 11/15 리팩토링에서 지웠다)
 - 웹 글을 주소로 가져오는 기능은 만들지 않는다(사용자 결정).
 - GitHub Pages 같은 공개 페이지는 사용자가 직접 켠다.
 
@@ -85,7 +85,7 @@
 
 ## 폴더
 
-- `src/app/study`(화면), `src/app/api`(API), `src/lib`(기능), `desktop/`(Electron 앱), `scripts/`(켜기·끄기·데이터 동기화·데이터 보관), `experiments/project-course/`(실습 코스 서버·VS Code 확장), `extension/`(크롬 확장).
-- `lab/`: 실험실(엔진·PS 실험 서버, 문제 만들기·프롬프트 점검 실험, 실험 코드). 제품 흐름에 넣지 않는다. 새 실험도 여기에.
+- `src/app/study`(화면), `src/app/api`(API), `src/lib`(기능), `desktop/`(Electron 앱), `scripts/`(켜기·끄기·데이터 동기화·데이터 보관), `experiments/project-course/`(실습 코스 서버·VS Code 확장).
 - `tools/`: 개발 도구(토큰 사용량·작업 현황, `space.mjs` 용량 보기, 데이터 보관하고 새로 시작, 에이전트 MCP).
 - 2026-11-05 정리로 옛 Study Forge 화면·API·도구·스크립트·`eval/`·`보관/`을 지웠다(`협업/결과보고/계획_리팩토링_A_20261105.md`). git 기록에서 되살릴 수 있다. 아직 남은 옛 이름(`mcp-*`, `study-executor`, `personalization-lab`, `tools/problem-authoring-lab`, `tools/study-forge-mcp`의 5개 파일)은 지금 공부 화면이 쓰는 것이다.
+- 2026-11-15 리팩토링(DECISIONS 같은 날): 화면에서 닿지 않는 것 · 개발판 · 옛 엔진(v2·v3·astra·문제 만들기·정리 글) · Firebase · 크롬 사이드바 확장 · `출제기준/`을 지웠다. 엔진은 줄기 → 기억 채우기 한 길(`src/lib/study/gen/CLAUDE.md`). 공부 화면은 React 틀 하나(`StudyShell.tsx`).

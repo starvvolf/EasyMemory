@@ -59,10 +59,3 @@ export function figureCropper(pdf: Uint8Array, pages: number[], save: (name: str
     async finish() { await work; await (await cropper).close(); return { ms: Date.now() - t0, hinted, quoted, files: done.size }; },
   };
 }
-
-/** 한 번에 (다시 자르기) */
-export async function attachFigures(pdf: Uint8Array, pages: number[], cards: Card[], save: (name: string, jpeg: Buffer) => Promise<void>) {
-  const f = figureCropper(pdf, pages, save);
-  await f.add(cards);
-  return f.finish();
-}

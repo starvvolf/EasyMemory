@@ -5,35 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createGen, runGen } from "./gen/runner.ts";
-import { knowledgeLayer } from "./knowledge.ts";
-import type { KnowledgeLayer } from "./knowledge.ts";
+import { importCardsOf, importPayload } from "./knowledge.ts";
 import { materialMap } from "./material-map.ts";
 import { importPoints, itemsForRefs, recordByRef } from "../knowledge/store.ts";
-
-// 엔진 카드를 지식 저장소에 넣는 모양 (예전 knowledge-contract.ts, 11/15 리팩토링에서 화면 쪽 사용이 없어져 이 시험에만 남김)
-const materialOf = (deck: { sourceName?: string; title?: string }) => String(deck.sourceName || deck.title || "").replace(/\.pdf$/i, "");
-
-/** A material's knowledge points as the knowledge store takes them: ref "자료id:포인트id", folder "자료 이름/구역". */
-function importPayload(deck: { id: string; sourceName?: string; title?: string }, layer: KnowledgeLayer | undefined) {
-  const material = materialOf(deck);
-  return (layer?.points ?? []).map((point) => ({
-    ref: `${deck.id}:${point.id}`.slice(0, 200),
-    title: point.title.slice(0, 120),
-    essentials: point.essentials.slice(0, 6).map((e) => e.slice(0, 1500)),
-    folder: `${material.slice(0, 60)}${point.section ? `/${point.section.slice(0, 60)}` : ""}`,
-    material: material.slice(0, 120),
-    ...(point.pages[0] ? { page: point.pages[0] } : {}),
-    ...(point.importance ? { importance: point.importance } : {}),
-    ...(point.ask ? { ask: point.ask.slice(0, 300) } : {}),
-  }));
-}
-
-/** The refs a practice result on one question goes to: the points its objective covers. */
-function practiceRefs(deckId: string, layer: KnowledgeLayer | undefined, objectiveId: string | undefined) {
-  if (!layer || !objectiveId) return [];
-  return (layer.byObjective[objectiveId] ?? []).slice(0, 20).map((pid) => `${deckId}:${pid}`);
-}
-
 
 const pages = new Map([
   [1, "# Back-Face Detection\n- A polygon is a back face if its normal points away from the viewer\n- In a right-handed system the test is C <= 0"],
@@ -55,18 +29,33 @@ test("the map shows the outline's cards and the learner's state on each", async 
     assert.equal(before.counts.new, before.counts.cards, "nothing saved yet: every card is new");
     assert.ok(before.sections.every((s) => s.cards.every((c) => c.pages.length && c.ref.startsWith(`${done.id}:`))));
 
-    const layer = knowledgeLayer(done);
-    const payload = importPayload({ id: done.id, sourceName: "invented.pdf" }, layer);
+    const payload = importPayload(done);
     await importPoints(payload);
-    const objective = Object.keys(layer.byObjective)[0];
-    await recordByRef(practiceRefs(done.id, layer, objective), "wrong", "지도 시험");
+    await recordByRef([refsOf(done)[0]], "wrong", "지도 시험");
     const after = materialMap(done, await itemsForRefs(refsOf(done)))!;
     assert.ok(after.counts.unknown >= 1, JSON.stringify(after.counts));
     // 핵심 카드만 지식으로 (B, 10/30): 핵심 카드는 가져오자마자 지식, 보조 카드는 풀거나 "모름"을 누르기 전까지 "아직".
     const core = new Set(payload.filter((p) => p.importance === "core").map((p) => p.ref));
     assert.ok(after.sections.flatMap((s) => s.cards).filter((c) => core.has(c.ref)).every((c) => c.knowledgeId), "every core card is in the knowledge store after the import");
     assert.ok(after.sections.flatMap((s) => s.cards).filter((c) => c.state === "unknown").every((c) => c.knowledgeId));
-    assert.ok(after.counts.questions > 0);
+  } finally {
+    if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("카드만 만든 자료(questionsLater)도 카드 기록이 기억 저장소에 남는다", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "map-"));
+  const prior = process.env.STUDY_FORGE_DATA_DIR;
+  process.env.STUDY_FORGE_DATA_DIR = dir;
+  try {
+    const start = await createGen({ sourceId: "src_map_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", questionsLater: true });
+    const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+    assert.equal(done.status, "done", done.message);
+    const ref = `${done.id}:${done.sections.flatMap((x) => done.recaller?.units[x.id]?.cards ?? [])[0].id}`;
+    assert.equal((await recordByRef([ref], "wrong", "플래시카드")).recorded, 0, "before: the card is not in the store");
+    await importCardsOf([ref]);
+    assert.equal((await recordByRef([ref], "wrong", "플래시카드")).recorded, 1);
   } finally {
     if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
     await rm(dir, { recursive: true, force: true });

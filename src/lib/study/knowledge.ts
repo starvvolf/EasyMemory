@@ -25,7 +25,6 @@ export type KnowledgePoint = {
 };
 export type KnowledgeLayer = { points: KnowledgePoint[]; byObjective: Record<string, string[]> };
 
-type ObjectiveLike = { id: string; statement: string; recall?: string; pages?: number[]; quotes?: string[]; astra?: { conceptIds?: string[] } };
 
 /**
  * Knowledge points of one generated material. Plans that name concepts (astra, v4, v5, alpha) give one point per
@@ -51,33 +50,39 @@ export function knowledgeLayer(state: GenState): KnowledgeLayer {
     for (const slot of Object.values(state.recaller.deep)) for (const q of slot.parts ?? (slot.question ? [slot.question] : [])) byObjective[q.objectiveId] = q.cardIds;
     return { points, byObjective };
   }
-  const plan = state.astra?.plan;
-  const sectionTitle = (outlineIds: string[]) => state.sections.find((section) => outlineIds.includes(section.id))?.title ?? "";
-  const objectives = state.sections.flatMap((section) => ((section.design?.objectives ?? []) as ObjectiveLike[]).map((objective) => ({ objective, section: section.title })));
-  if (plan?.concepts?.length) {
-    const points: KnowledgePoint[] = plan.concepts.map((concept) => ({
-      id: concept.id,
-      title: concept.title,
-      essentials: [...concept.essentials, ...concept.conditions].filter((line) => line.trim()).slice(0, 6),
-      section: sectionTitle(concept.outlineIds),
-      pages: [...new Set(concept.evidence.map((evidence) => evidence.page))].sort((a, b) => a - b),
-      spans: concept.evidence.map((evidence) => ({ page: evidence.page, kind: evidence.kind, quote: evidence.quote || evidence.supports })),
-    }));
-    const known = new Set(points.map((point) => point.id));
-    const byObjective: Record<string, string[]> = {};
-    for (const { objective } of objectives) {
-      const ids = (objective.astra?.conceptIds ?? []).filter((id) => known.has(id));
-      if (ids.length) byObjective[objective.id] = ids;
-    }
-    return { points, byObjective };
-  }
-  const points: KnowledgePoint[] = objectives.map(({ objective, section }) => ({
-    id: `o:${objective.id}`,
-    title: (objective.recall || objective.statement).slice(0, 80),
-    essentials: [objective.statement],
-    section,
-    pages: [...new Set(objective.pages ?? [])],
-    spans: (objective.pages ?? []).map((page, index) => ({ page, kind: "text", quote: objective.quotes?.[index] ?? "" })),
+  // 11/15 리팩토링: 예전 엔진(astra · v2 …)의 계획·목표는 더 읽지 않는다. recaller 카드가 없으면 포인트도 없다.
+  return { points: [], byObjective: {} };
+}
+
+/**
+ * 자료 카드 → 기억 저장소 (11/15 리팩토링 중 찾은 빈틈): 예전에는 공부 화면(DejipgiStudy)이 목록을 읽을 때 카드를 넣었는데
+ * (/api/knowledge/import), 문제 없이 카드만 만든 실행(questionsLater)은 그 길을 타지 않아 플래시카드 결과가 남지 않았다
+ * ("N장은 기억 저장소에 남기지 못했어요"). 이제 카드 ref로 기록을 남길 때 그 자료의 카드를 먼저 넣는다(핵심은 바로, 보조는 기다림).
+ * 같은 서버에서 다 만든 자료는 한 번만.
+ */
+const imported = new Set<string>();
+export function importPayload(state: GenState) {
+  const material = String(state.input.fileName ?? "").replace(/\.pdf$/i, "");
+  return knowledgeLayer(state).points.map((point) => ({
+    ref: `${state.id}:${point.id}`.slice(0, 200),
+    title: point.title.slice(0, 120),
+    essentials: point.essentials.slice(0, 6).map((e) => e.slice(0, 1500)),
+    folder: `${material.slice(0, 60)}${point.section ? `/${point.section.slice(0, 60)}` : ""}`,
+    material: material.slice(0, 120),
+    ...(point.pages[0] ? { page: point.pages[0] } : {}),
+    ...(point.importance ? { importance: point.importance } : {}),
+    ...(point.ask ? { ask: point.ask.slice(0, 300) } : {}),
   }));
-  return { points, byObjective: Object.fromEntries(objectives.map(({ objective }) => [objective.id, [`o:${objective.id}`]])) };
+}
+export async function importCardsOf(refs: string[]) {
+  const ids = [...new Set(refs.map((r) => /^(gen_[a-z0-9]{8,64}):/.exec(r)?.[1]).filter((id): id is string => Boolean(id) && !imported.has(id!)))];
+  if (!ids.length) return;
+  const [{ loadGen }, { importPoints }] = await Promise.all([import("./gen/runner.ts"), import("../knowledge/store.ts")]);
+  for (const id of ids) {
+    const state = await loadGen(id);
+    if (!state?.recaller) continue;
+    const payload = importPayload(state);
+    if (payload.length) await importPoints(payload.slice(0, 2000));
+    if (state.status === "done") imported.add(id);
+  }
 }

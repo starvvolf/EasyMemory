@@ -7,41 +7,25 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning --test \"src/**/*.test.ts\" \"scripts/*.test.ts\" \"tools/**/*.test.ts\"",
-    "auth:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/auth-policy.test.ts",
-    "firebase:rules:test": "node --test scripts/firebase-rules.test.mjs",
-    "firebase:emulator:test": "firebase emulators:exec --only firestore,storage \"npm run firebase:rules:test\"",
-    "project:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-project-store.test.ts",
-    "vscode-link:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/vscode-link.test.ts"
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning --test \"src/**/*.test.ts\" \"scripts/*.test.ts\"",
+    "project:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-project-store.test.ts"
   },
   "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/utilities": "^3.2.2",
     "@huggingface/transformers": "^4.3.1",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "@xyflow/react": "^12.10.0",
-    "firebase": "^12.18.0",
-    "firebase-admin": "^14.3.0",
     "katex": "^0.18.9",
-    "lucide-react": "^1.25.0",
     "next": "16.3.4",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "tesseract.js": "^7.0.0",
-    "ts-fsrs": "^5.4.1",
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4",
-    "@types/express": "^5.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
-    "firebase-tools": "^15.29.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

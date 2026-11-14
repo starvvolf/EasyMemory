@@ -19,9 +19,9 @@ async function handle(request: Request, context: Context) {
     if (!p.length && method === "GET") {
       // ?origin=study: only materials made on the study screen.
       const origin = new URL(request.url).searchParams.get("origin");
-      result = { runs: (await listGens()).filter((gen) => !origin || (gen.input.origin ?? "lab") === origin).map((gen) => ({ id: gen.id, createdAt: gen.createdAt, status: gen.status, phase: gen.phase, fileName: gen.input.fileName, sourceId: gen.input.sourceId, message: gen.message,
-        pages: gen.input.pageNumbers, purpose: gen.input.purpose, provider: gen.input.provider, calls: gen.calls, forkOf: gen.forkOf ?? null, origin: gen.input.origin ?? "lab",
-        method: methodOf(gen), pastExam: Boolean(gen.pastExam), sectionsDone: gen.sections.filter((section) => section.author).length, sectionCount: gen.sections.length })) };
+      result = { runs: (await listGens()).filter((gen) => !origin || (gen.input.origin ?? "lab") === origin).map((gen) => ({ id: gen.id, createdAt: gen.createdAt, status: gen.status, phase: gen.phase,
+        fileName: gen.input.fileName, sourceId: gen.input.sourceId, pages: gen.input.pageNumbers, calls: gen.calls, origin: gen.input.origin ?? "lab", message: gen.message,
+        sectionsDone: gen.sections.filter((section) => gen.recaller?.units[section.id]?.status === "ready").length, sectionCount: gen.sections.length })) };
     } else if (!p.length && method === "POST") {
       const body = z.object({ confirmed: z.boolean().optional() }).passthrough().parse(await boundedJson(request));
       const { confirmed, ...input } = body;
@@ -53,10 +53,3 @@ async function handle(request: Request, context: Context) {
 export const GET = handle;
 export const POST = handle;
 
-/** 실험실 목록에 보일 방법 한 줄 (recaller 엔진, 11/5). */
-function methodOf(gen: { input: { engine?: string; lab?: Record<string, unknown> } }) {
-  const lab = gen.input.lab ?? {};
-  if (gen.input.engine !== "recaller") return "";
-  const how = lab.mapCards ? `목차→카드(${lab.mapUnit === "page" ? "쪽" : "주제"})${lab.flowCard === "with" ? "+흐름(같이)" : lab.flowCard === "after" ? "+흐름(다음에)" : ""}${lab.goalQuiz ? " · 목표형 문제" : ""}` : lab.conceptLines ? "개념 줄" : lab.digest ? "목차→요약→카드" : "쪽 정리";
-  return `${how}${lab.quiz === "luna" ? ` · 퀴즈${lab.quizCount ?? ""}` : ""}`;
-}

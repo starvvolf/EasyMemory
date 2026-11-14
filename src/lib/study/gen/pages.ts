@@ -235,22 +235,3 @@ export function emphasisFromOps(ops: { fnArray: number[]; argsArray: unknown[] }
 }
 
 export const meaningfulChars = (text: string) => (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
-
-/** Below this many letters and digits a slide is read from its image; a full text slide is left to its text layer. */
-export const TEXT_RICH_CHARS = 600;
-/**
- * Pages worth reading from the image. Picture counts were tried and dropped: slide templates repeat decorative
- * images on every page, while a matrix drawn as one picture looks like any other slide (graphics 02 p.10).
- * Reading costs about 2,000 input tokens and 10–30 s per page (GPT 실측 2026-10-12), so anything short of a full
- * text slide is read.
- */
-export function needsImage(text: string) {
-  return meaningfulChars(text) < TEXT_RICH_CHARS;
-}
-
-export const TRANSCRIBE_SYSTEM = [
-  "너는 강의 슬라이드 한 쪽을 글로 옮기는 사람이다. 이미지에 보이는 것만 옮기고, 보이지 않는 내용은 지어내지 않는다.",
-  "순서: 제목 → 본문 글(글머리표 구조 유지) → 식(LaTeX, $...$) → 표(마크다운 표) → 그림·도표(무엇을 보여 주는지 한두 문장, 그림 안 글자·수치·축 이름은 그대로).",
-  "원문의 언어와 표기를 그대로 둔다. 해설·요약·번역을 덧붙이지 않는다. 읽을 수 없는 부분은 [읽을 수 없음]으로 쓴다.",
-  "아래 [글자 층]은 PDF에서 뽑은 글자다. 깨졌거나 빠진 부분이 있을 수 있으니 이미지를 기준으로 하고, 글자 층에 있는 문장은 글자 그대로 살린다.",
-].join("\n");

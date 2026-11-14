@@ -264,60 +264,6 @@ export function sortShapes(shapes: Array<{ box: Box; filled: boolean; stroked: b
   return { graphics: keep, shades };
 }
 
-/** For each quote on one page: whether to cut and what (JPEG data URL when cut). `frame` from `frameOf` (shapes repeated across the deck). */
-export async function cropQuotes(bytes: Uint8Array, page: number, quotes: string[], options: { width?: number; frame?: Set<string> } = {}) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const { createCanvas } = await import("@napi-rs/canvas");
-  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
-  try {
-    const OPS = pdfjs.OPS as Record<string, number>;
-    const p = await document.getPage(page) as unknown as PdfPage & { render: (o: unknown) => { promise: Promise<void> } };
-    const { viewport, runs, shapes, graphics: images } = await readPage(p, OPS);
-    const placed = placeRuns(runs, viewport.height);
-    const rows = rowsOf(placed);
-    const { graphics, shades } = sortShapes(shapes, images, rows, viewport, options.frame ?? new Set());
-    let canvas: import("@napi-rs/canvas").Canvas | undefined;
-    const width = options.width ?? 1600, scale = width / Math.max(viewport.width, viewport.height);
-    const draw = async () => {
-      if (canvas) return canvas;
-      const view = p.getViewport({ scale });
-      const c = createCanvas(Math.ceil(view.width), Math.ceil(view.height));
-      const ctx = c.getContext("2d"); ctx.fillStyle = "white"; ctx.fillRect(0, 0, c.width, c.height);
-      await p.render({ canvas: c, canvasContext: ctx, viewport: view }).promise;
-      canvas = c;
-      return c;
-    };
-    const out = [];
-    for (const quote of quotes) {
-      const hit = findQuote(placed, quote);
-      if (!hit) { out.push({ quote, found: false, mode: "none" as CropMode }); continue; }
-      const d = decideCrop(hit, rows, graphics, viewport, shades);
-      const emphasized = shades.some((s) => overlap(s.box, hit) > area(hit) * 0.5);
-      if (d.mode === "none" || !d.box) { out.push({ quote, found: true, mode: d.mode, emphasized }); continue; }
-      const r = cropRect(d.box, scale, viewport, d.pad);
-      const c = await draw();
-      const cut = createCanvas(r.w, r.h); cut.getContext("2d").drawImage(c as never, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
-      out.push({ quote, found: true, mode: d.mode, emphasized, box: [d.box.x0 / viewport.width, d.box.y0 / viewport.height, d.box.x1 / viewport.width, d.box.y1 / viewport.height],
-        image: `data:image/jpeg;base64,${cut.toBuffer("image/jpeg", 85).toString("base64")}` });
-    }
-    return out;
-  } finally { await (document as unknown as { cleanup?: () => Promise<void> }).cleanup?.(); }
-}
-
-/** Shapes and pictures at the same place on many pages of the deck (template frame), to leave out. */
-export async function frameOf(bytes: Uint8Array, pages: number[], share = 0.4) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
-  const count = new Map<string, number>();
-  try {
-    for (const n of pages) {
-      const { shapes, graphics } = await readPage(await document.getPage(n) as unknown as PdfPage, pdfjs.OPS as Record<string, number>);
-      for (const k of new Set([...shapes.map((s) => keyOf(s.box)), ...graphics.map((g) => keyOf(g.box))])) count.set(k, (count.get(k) ?? 0) + 1);
-    }
-  } finally { await (document as unknown as { cleanup?: () => Promise<void> }).cleanup?.(); }
-  return new Set([...count].filter(([, c]) => pages.length >= 3 && c >= pages.length * share).map(([k]) => k));
-}
-
 /**
  * 그림 위치 힌트로 자르기 (11/8 그래픽스 04처럼 글자가 그림으로 박혀 인용으로 위치를 못 찾는 자료): 카드 AI가 쪽 그림을 보고
  * 대략의 상자(쪽을 0~100으로 본 [x0, y0, x1, y1])를 주면, 코드가 그 상자와 겹치는 그림 덩어리에 맞춘다(figure).
@@ -356,31 +302,6 @@ function snapAt(hint: Box, graphics: Graphic[], page: { width: number; height: n
   }
   // 근처에 그림이 없으면 자르지 않는다(11/8 그래픽스 점검: 글줄이 그림으로 박힌 쪽에서 글만 반쯤 잘려 나왔다)
   return { mode: "none" };
-}
-
-export async function cropHints(bytes: Uint8Array, page: number, hints: Array<[number, number, number, number]>, options: { width?: number; frame?: Set<string> } = {}) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const { createCanvas } = await import("@napi-rs/canvas");
-  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
-  try {
-    const p = await document.getPage(page) as unknown as PdfPage & { render: (o: unknown) => { promise: Promise<void> } };
-    const { viewport, runs, shapes, graphics: images } = await readPage(p, pdfjs.OPS as Record<string, number>);
-    const rows = rowsOf(placeRuns(runs, viewport.height));
-    const { graphics } = sortShapes(shapes, images, rows, viewport, options.frame ?? new Set());
-    const width = options.width ?? 1600, scale = width / Math.max(viewport.width, viewport.height);
-    const view = p.getViewport({ scale });
-    const canvas = createCanvas(Math.ceil(view.width), Math.ceil(view.height));
-    const ctx = canvas.getContext("2d"); ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await p.render({ canvas, canvasContext: ctx, viewport: view }).promise;
-    return hints.map((h) => {
-      const hint: Box = { x0: h[0] / 100 * viewport.width, y0: h[1] / 100 * viewport.height, x1: h[2] / 100 * viewport.width, y1: h[3] / 100 * viewport.height };
-      const d = snapHint(hint, graphics, viewport, rows, placeRuns(runs, viewport.height));
-      if (d.mode === "none" || !d.box) return { hint: h, mode: "none" as CropMode };
-      const r = cropRect(d.box, scale, viewport, { top: 8, bottom: 8 }, 8);
-      const cut = createCanvas(Math.max(1, r.w), Math.max(1, r.h)); cut.getContext("2d").drawImage(canvas as never, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
-      return { hint: h, mode: d.mode, box: [d.box.x0 / viewport.width, d.box.y0 / viewport.height, d.box.x1 / viewport.width, d.box.y1 / viewport.height], image: `data:image/jpeg;base64,${cut.toBuffer("image/jpeg", 85).toString("base64")}` };
-    });
-  } finally { await (document as unknown as { cleanup?: () => Promise<void> }).cleanup?.(); }
 }
 
 /**
