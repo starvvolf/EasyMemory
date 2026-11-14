@@ -12,7 +12,7 @@ import path from "node:path";
 const [cmd, dir, id, arg] = process.argv.slice(2);
 if (!cmd || !dir) { console.log("사용법: list|show|answer|fail|wait <dir> …"); process.exit(1); }
 const pending = async () => (await readdir(dir).catch(() => [])).filter((n) => n.startsWith("req-") && n.endsWith(".json"))
-  .map((n) => n.slice(4, -5)).filter((x) => true).sort();
+  .map((n) => n.slice(4, -5)).sort();
 const answered = async (x) => (await readdir(dir).catch(() => [])).includes(`res-${x}.json`);
 
 /** 아주 작은 JSON 스키마 확인: type · required · properties · items · enum. 틀린 곳 목록. */
