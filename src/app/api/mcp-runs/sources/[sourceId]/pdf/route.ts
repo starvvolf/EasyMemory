@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireExperimentPrincipal } from "@/lib/local-experiment-auth";
-import { readMcpSourcePdf } from "@/lib/mcp-source-catalog";
+import { readRegisteredMcpSourcePdf } from "@/lib/mcp-source-registry";
 import { toUserDataError } from "@/lib/server-user";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export async function GET(request: Request, context: { params: Promise<{ sourceI
   try {
     await requireExperimentPrincipal(request);
     const { sourceId } = await context.params;
-    const bytes = await readMcpSourcePdf(sourceId);
+    const bytes = /^src_[a-f0-9]{64}$/.test(sourceId) ? await readRegisteredMcpSourcePdf(sourceId) : null;
     if (!bytes) return NextResponse.json({ message: "등록된 원본 PDF를 찾지 못했거나 파일이 변경되었습니다." }, { status: 404 });
     return new Response(new Uint8Array(bytes), {
       headers: {

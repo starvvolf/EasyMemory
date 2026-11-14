@@ -1,8 +1,8 @@
 // The model picks block kinds, their order and the answer form; code places the blocks top to bottom,
 // wires the response, and fills the source from the confirmed objective (never copied by the model).
-import type { AuthoredQuestion, AuthoringBlock, AuthoringDocument, ResponseContract, SourceContent } from "../../../../tools/problem-authoring-lab/contract.ts";
-import { validateDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
-import { inspectQuality } from "../../../../tools/problem-authoring-lab/quality.ts";
+import type { AuthoredQuestion, AuthoringBlock, AuthoringDocument, ResponseContract, SourceContent } from "../authoring/contract.ts";
+import { validateDocument } from "../authoring/contract.ts";
+import { inspectQuality } from "../authoring/quality.ts";
 import type { AuthoredReplyQuestion } from "./schemas.ts";
 import type { Issue, Objective, Section } from "./types.ts";
 

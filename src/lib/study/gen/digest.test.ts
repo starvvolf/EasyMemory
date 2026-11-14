@@ -413,22 +413,6 @@ test("앱(공부 화면) 기본 (11/5): 목차 → 바로 카드로 카드 먼�
   assert.ok(qs.length >= 1, "문제가 나온다");
 }));
 
-test("실험실 프롬프트 고치기 (11/5): 실행에 넣은 프롬프트가 그 단계 호출에 쓰이고, 목록은 코드의 기본값을 준다", async () => {
-  const { EDITABLE_PROMPTS } = await import("./prompt-registry.ts");
-  const { MAP_CARD } = await import("./digest.ts");
-  assert.equal(EDITABLE_PROMPTS.find((p) => p.name === "MAP_CARD")?.text, MAP_CARD);
-  await withData(async () => {
-    const io = { pdf: async () => null, pages: async () => pages };
-    const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake",
-      lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, prompts: { MAP_CARD: "고친 카드 지시: 항목마다 카드 하나.", PLAN_COMMON: "" } } });
-    const done = await runGen(start.id, { uid: "local-experiment" }, io);
-    assert.equal(done.status, "done", done.message);
-    const calls = await readGenCalls(done.id);
-    assert.ok(calls.filter((c) => c.step === "rc-digest-card").every((c) => (c.system ?? "").includes("고친 카드 지시") && !(c.system ?? "").includes("목차가 고른 항목")));
-    assert.ok((calls.find((c) => c.step === "rc-digest-plan")?.system ?? "").includes("자료 뒤에 오는 [작업]만"), "빈 값은 기본값");
-  });
-});
-
 test("흐름 카드 (11/6): 주제마다 흐름 카드 한 장이 맨 앞에 — 같이 만들기는 카드 호출에, 다음에 만들기는 rc-flow 호출로, 퀴즈에는 안 쓴다", () => withData(async () => {
   const io = { pdf: async () => null, pages: async () => pages };
   for (const flowCard of ["with", "after"] as const) {

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, later } from "./api";
 
-type Info = { enabled: boolean; provider: string; model: { ready: boolean; message: string } };
+type Info = { provider: string; model: { ready: boolean; message: string } };
 
 export default function AccountChip() {
   const [info, setInfo] = useState<Info | null>(null);
@@ -13,7 +13,7 @@ export default function AccountChip() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const box = useRef<HTMLDivElement>(null);
-  const load = useCallback(async () => { try { setInfo(await call<Info>("/api/study-executor")); } catch (e) { setNote(errorText(e)); } }, []);
+  const load = useCallback(async () => { try { setInfo(await call<Info>("/api/auth/chatgpt/status")); } catch (e) { setNote(errorText(e)); } }, []);
   useEffect(() => { const first = later(() => void load()); const on = () => void load(); window.addEventListener("focus", on);
     return () => { first(); window.removeEventListener("focus", on); }; }, [load]);
   useEffect(() => {

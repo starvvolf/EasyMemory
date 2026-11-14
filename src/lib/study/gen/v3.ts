@@ -7,7 +7,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import type { AuthoredQuestion, AuthoringBlock } from "../../../../tools/problem-authoring-lab/contract.ts";
+import type { AuthoredQuestion, AuthoringBlock } from "../authoring/contract.ts";
 import { locate } from "./checks.ts";
 import { DEFAULT_GUIDE_DIR, ruleLines } from "./guide.ts";
 import { purposeLabel, type GenInput, type Issue, type Objective, type ObjectiveKind, type Purpose, type Section } from "./types.ts";

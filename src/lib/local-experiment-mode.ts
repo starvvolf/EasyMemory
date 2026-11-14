@@ -38,27 +38,6 @@ export function localExperimentStatusPayload(
   return base.active ? { ...base, serverPid: runtime.serverPid, projectRoot: runtime.projectRoot } : base;
 }
 
-export function isLocalExperimentApiPath(pathname: string): boolean {
-  return pathname.startsWith("/api/lab/") || pathname === "/api/mcp-runs" ||
-    // 토론방 (src/app/room): the route checks the local principal itself.
-    pathname === "/api/room" || pathname.startsWith("/api/room/") ||
-    // 지식 · 코드 · 일정 · 에이전트 툴 (2026-10-26): routes that check the local principal themselves.
-    ["/api/knowledge", "/api/code", "/api/schedule", "/api/agent", "/api/study-map", "/api/project-course", "/api/model-speed"].some((base) => pathname === base || pathname.startsWith(`${base}/`)) ||
-    pathname.startsWith("/api/mcp-runs/") ||
-    pathname === "/api/mcp-experiment-requests" ||
-    pathname.startsWith("/api/mcp-experiment-requests/") ||
-    pathname === "/api/personalization-lab" ||
-    pathname.startsWith("/api/personalization-lab/") ||
-    pathname === "/api/study-executor" ||
-    pathname === "/api/study-notes" ||
-    // Study data routes that check the local principal themselves (records mirror, quality loop, rules, plan, memory, 보관함).
-    ["/api/study-archive", "/api/study-quality", "/api/study-records", "/api/study-rules", "/api/study-plan", "/api/study-memory"].includes(pathname) ||
-    pathname === "/api/tablet" ||
-    pathname === "/api/auth/chatgpt/start" ||
-    pathname === "/api/auth/chatgpt/callback" ||
-    pathname === "/api/auth/chatgpt/logout";
-}
-
 export function isSameOriginExperimentMutation(request: Request): boolean {
   if (["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) return true;
   const origin = request.headers.get("origin");

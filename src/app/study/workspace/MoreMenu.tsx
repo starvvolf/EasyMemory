@@ -1,11 +1,7 @@
 "use client";
-// ⋯ 더보기: what most study days do not need, out of the way — records and account, the one-page summary, the older
-// archive, prompt settings, the tablet, and (folded) the developer screens.
+// ⋯ 더보기: 공부하는 날에는 잘 안 쓰는 것 — 데이터 관리. (11/15 리팩토링: 옛 문제 세트의 학습 기록 · 한 장 정리 · 보관함 · 프롬프트 · 태블릿은 뺐다)
 import DataPanel from "./DataPanel";
 import { useEffect, useRef, useState } from "react";
-import { go } from "./api";
-
-const clickById = (id: string) => (document.getElementById(id) as HTMLButtonElement | null)?.click();
 
 export default function MoreMenu() {
   const [open, setOpen] = useState(false);
@@ -21,20 +17,12 @@ export default function MoreMenu() {
   const item = (label: string, hint: string, run: () => void) => (
     <button role="menuitem" className="mm-item" onClick={() => { setOpen(false); run(); }}><span>{label}</span><small>{hint}</small></button>
   );
-  const has = (id: string) => typeof document !== "undefined" && Boolean(document.getElementById(id));
   return (
     <div className="mm" ref={box}>
       <button className="mm-btn" aria-haspopup="menu" aria-expanded={open} aria-label="더보기" onClick={() => setOpen(!open)}>⋯</button>
       {open ? (
         <div className="mm-card" role="menu">
-          {item("학습 기록", "문제별 기록 (ChatGPT 연결은 위의 버튼)", () => go("records"))}
-          {item("한 장 정리", "자료별로 떠올릴 것 모아 보기 · 인쇄", () => go("summary"))}
-          {item("보관함", "치워 둔 문제 세트", () => go("archive"))}
           {item("데이터 관리", "크기·동기화·보관하고 비우기", () => setData(true))}
-          <hr />
-          {has("promptBtn") ? item("프롬프트 설정", "설명·답변을 어떻게 해 줄지", () => clickById("promptBtn")) : null}
-          {has("tabletBtn") ? item("태블릿에서 열기", "같은 와이파이의 태블릿", () => clickById("tabletBtn")) : null}
-          {has("fsBtn") ? item("전체화면", "주소창 숨기기", () => clickById("fsBtn")) : null}
           <p className="mm-note">이 컴퓨터에서 돌아가요. 기록은 RecallerData에 저장되고, 앱을 끌 때 올라가요.</p>
         </div>
       ) : null}

@@ -3,7 +3,6 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { startTabletProxy } from "./tablet-proxy.mjs";
 
 // ChatGPT tokens are stored encrypted (required on Windows). The key lives in the user's home folder,
 // not next to the tokens in the project data folder, and stays the same across runs.
@@ -42,8 +41,6 @@ const env = {
   STUDY_FORGE_CHATGPT_ENCRYPTION_KEY: chatGptTokenKey(),
 };
 
-// 태블릿 모드: a paired-device gate on the home network (scripts/tablet-proxy.mjs). Set STUDY_FORGE_TABLET=0 to turn off.
-const tablet = process.env.STUDY_FORGE_TABLET === "0" ? null : startTabletProxy({ projectRoot: process.cwd() });
 
 const restarts = [];
 function startNext() {
@@ -59,7 +56,6 @@ function startNext() {
     if (!stopping && restarts.length < 5) { restarts.push(now); note("3초 뒤 다시 켜요"); setTimeout(startNext, 3000); return; }
     try { rmSync(stopMark, { force: true }); } catch { /* none */ }
     process.exitCode = code ?? 1;
-    if (tablet) tablet.close();
     process.exit(process.exitCode);
   });
 }

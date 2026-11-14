@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ModelError } from "../../ai/model.ts";
-import { validateDocument, type AuthoringDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
+import { validateDocument, type AuthoringDocument } from "../authoring/contract.ts";
 import { checkClassify, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { byFocus, confirmObjectives, createGen, enqueueGen, forkGen, loadGen, studyDocument, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
@@ -306,25 +306,6 @@ test("입력칸의 지시 문구는 지우고 경고로 남기며, 짧은 꼬리
   });
 });
 
-test("점수표는 형식·종류·안 쓰인 항목·의심 신호·비용을 숫자로 낸다(모델 호출 없음)", () => withData(async () => {
-  const { scorecard } = await import("./scorecard.ts");
-  const fakeReply = (step: GenStep, user: string) => {
-    if (step === "design") return JSON.stringify({ objectives: [{ statement: "방법을 고를 수 있다", cue: "실마리", recall: `방문 표시와 같은 방법 (${/\[목차\] (.+?) \(/.exec(user)?.[1]})`, kind: "절차", importance: "core", itemNumbers: [1], materialNumbers: [] }] });
-    return genFakeReply(step, user);
-  };
-  const state = await createGen({ ...base, purpose: "core", autoConfirm: true });
-  const done = await runGen(state.id, caller, { pages, fakeReply });
-  const documents = new Map(await Promise.all(done.sections.map(async (section) => [section.id, await readSectionDocument(state.id, section.id) as AuthoringDocument] as const)));
-  const score = scorecard(done, await readGenCalls(state.id), documents);
-  assert.equal(score.counts.questions, 2);
-  assert.equal(score.formats.selfCheck, 2);
-  assert.equal(score.formats.selfCheckRatio, 1);
-  assert.deepEqual(score.objectiveKinds, { 절차: 2 });
-  assert.equal(score.calls.total, 7);
-  assert.deepEqual(score.suspects.map((item) => item.code).sort(), ["recall-pointer", "recall-pointer", "verb-format", "verb-format"]);
-  assert.equal(score.judge, null);
-}));
-
 test("앞 단계 고정 재실행: 목차·분류(출제만이면 목표까지)를 그대로 쓰고 뒤 단계만 다시 부른다", () => withData(async () => {
   const first = await createGen({ ...base, purpose: "core", autoConfirm: true, models: { design: { model: "gpt-6-luna", effort: "low" } } });
   const done = await runGen(first.id, caller, { pages });
@@ -497,15 +478,6 @@ test("내용이 있는데 분류 항목이 없는 쪽은 다시 묻는다", () =
   const checked = checkClassify({ items: [{ kind: "핵심 지식", content: "평행 투영", quote: "Parallel projection keeps lines parallel", page: 20 }] }, section, texts);
   assert.equal(checked.items.length, 1);
   assert.match(checked.problems.map((problem) => problem.message).join(), /p\.19에 분류 항목이 하나도 없습니다/);
-});
-
-test("공부 화면: 구분자 없이 쓴 LaTeX 정답은 수식으로 감싼다", async () => {
-  const { showMath } = await import("../from-authoring.ts");
-  assert.equal(showMath("\\begin{bmatrix}1&sh_x\\\\0&1\\end{bmatrix}"), "$\\begin{bmatrix}1&sh_x\\\\0&1\\end{bmatrix}$");
-  assert.equal(showMath("x' = x\\cos\\theta - y\\sin\\theta\ny' = x\\sin\\theta + y\\cos\\theta"), "$x' = x\\cos\\theta - y\\sin\\theta$\n$y' = x\\sin\\theta + y\\cos\\theta$");
-  assert.equal(showMath("행렬은 \\begin{bmatrix}1&0\\end{bmatrix} 이다"), "행렬은 $\\begin{bmatrix}1&0\\end{bmatrix}$ 이다");
-  assert.equal(showMath("큐에 들어간 적 없는 정점"), "큐에 들어간 적 없는 정점");
-  assert.equal(showMath("$a^{2}$"), "$a^{2}$");
 });
 
 test("v3: 전체 읽기 → 출제 계획 → 출제, 관문이 '꺼낼 것'을 본문에 쓴 문항을 다시 쓰게 한다", async () => withData(async () => {

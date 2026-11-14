@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { ModelError } from "@/lib/ai/model";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
-import { requireLocalRequest } from "@/app/api/mcp-experiment-requests/http";
+import { requireLocalRequest } from "@/lib/http";
 
-export { boundedJson } from "@/app/api/mcp-experiment-requests/http";
+export { boundedJson } from "@/lib/http";
 export type RouteContext = { params: Promise<{ path?: string[] }> };
 
 /** The new study routes are local only, like the lab: loopback, launched in local experiment mode, same origin. */

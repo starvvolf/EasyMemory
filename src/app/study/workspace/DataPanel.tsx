@@ -10,25 +10,11 @@ type View = { dir: string; total: number; files: number; sync: { repo: boolean; 
 const mb = (n: number) => n >= 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
 const day = (s?: string) => s ? new Date(s).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }) : "";
 
-/** 보관한 자료가 목록에 '만드는 중'으로 남지 않게: 이 브라우저와 서버의 대기 목록에서 그 자료를 뺀다. */
+/** 보관한 자료가 목록에 '만드는 중'으로 남지 않게 (11/15: 목록은 서버 실행 목록이라 다시 읽기만 하면 된다) */
 async function dropPending(genIds: string[]) {
   if (!genIds.length) return;
-  const gone = new Set(genIds);
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith("recaller:study:v1:") || !k.endsWith(":pending")) continue;
-      const list = JSON.parse(localStorage.getItem(k) || "[]") as Array<{ requestId?: string; artifactId?: string }>;
-      localStorage.setItem(k, JSON.stringify(list.filter((p) => !gone.has(p.requestId ?? "") && !gone.has(p.artifactId ?? ""))));
-    }
-  } catch { /* storage off */ }
-  try {
-    const r = await fetch("/api/study-records", { cache: "no-store" }).then((x) => x.json()) as { data?: { pending?: Array<{ requestId?: string; artifactId?: string }>; updatedAt?: number } };
-    if (r.data?.pending) {
-      const data = { ...r.data, pending: r.data.pending.filter((p) => !gone.has(p.requestId ?? "") && !gone.has(p.artifactId ?? "")), updatedAt: Date.now() };
-      await fetch("/api/study-records", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(data) });
-    }
-  } catch { /* the list just shows it as missing */ }
+  const { refreshMaterials } = await import("./materials");
+  await refreshMaterials().catch(() => undefined);
 }
 
 export default function DataPanel({ onClose }: { onClose: () => void }) {

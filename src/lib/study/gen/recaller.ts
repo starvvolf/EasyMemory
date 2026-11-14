@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { ModelRequest } from "../../ai/model.ts";
-import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
+import type { AuthoredQuestion } from "../authoring/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
 import { imageSize } from "./image-size.ts";
 import { addMore, fillGroups, HEADING_TERMS, goalsWithIds, memoryCard, STEM_FILL_GOALS, memoryCardQA, missingPages, parsePlan, settlePlan, splitGoals, STEM_GOALS_LINES, STEM_FILL, STEM_FILL_QA, STEM_MORE, STEM_MORE_LINES, STEM_PLAN, STEM_PLAN_LINES, stemFakeReply, stemFillQASchema, stemFillSchema, stemPlanSchema, type StemFill, type StemFillQA, type StemPlan, type StemRole } from "./stem.ts";

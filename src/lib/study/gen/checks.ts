@@ -2,7 +2,7 @@
 // Tier 1 (format) is the schema's job and is only re-verified with zod in the runner.
 // Tier 2 (not in the source, broken links, unsolvable) returns per-item problems: only those items are asked again.
 // Tier 3 (quality) becomes warnings and never triggers a call.
-import { containsQuote } from "../../../../tools/study-forge-mcp/source-evidence.ts";
+import { containsQuote } from "./source-evidence.ts";
 import { meaningfulChars } from "./pages.ts";
 import type { classifyReply, designReply, outlineReply } from "./schemas.ts";
 import type { z } from "zod";

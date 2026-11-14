@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import type { ModelRequest } from "../../ai/model.ts";
-import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
+import type { AuthoredQuestion } from "../authoring/contract.ts";
 import { authoredQuestion } from "./schemas.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
 import { assessmentOperations, defaultChosen, genStepLabel, objectiveKinds, studyFormats, v5Family, type GenState, type Assessment, type GenStep, type Issue, type Objective, type SectionState } from "./types.ts";

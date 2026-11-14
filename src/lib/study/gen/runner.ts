@@ -20,7 +20,7 @@ import { pagesOutside, SUMMARY_SYSTEM, summaryFakeReply, type SummaryState } fro
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
 import { DEFAULT_GEN_MODELS, astraFamily, v5Family, defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
-import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
+import type { AuthoredQuestion } from "../authoring/contract.ts";
 import { AUTHOR_SYSTEM, authorUser, buildMap, DERIVABLE_SYSTEM, derivableReply, derivableSchema, derivableUser, evidenceInQuestion, formatRules, gateCode, joinUnitMaps, mapItems,
   MAX_PDF_BYTES, MISREAD_SYSTEM, misreadReply, misreadSchema, misreadUser, planReply, planSchema, PLAN_SYSTEM, planToObjectives, planUser, readOutlineReply, readOutlineSchema,
   readOutlineUser, READ_SYSTEM, readUnitReply, readUnitSchema, readUnitUser, suggestedCount, type ReadUnitReply } from "./v3.ts";
@@ -565,7 +565,7 @@ export async function withTranscripts(id: string, texts: Map<number, string>) {
 
 export async function registeredPages(input: GenInput) {
   const [{ readRegisteredMcpSourcePdf }, { extractPdfPageTexts }] = await Promise.all([
-    import("../../mcp-source-registry.ts"), import("../../../../tools/study-forge-mcp/source-evidence.ts")]);
+    import("../../mcp-source-registry.ts"), import("./source-evidence.ts")]);
   const bytes = await readRegisteredMcpSourcePdf(input.sourceId);
   if (!bytes) throw new Stop("failed", "등록된 원본 PDF를 읽을 수 없어요.");
   const texts = await extractPdfPageTexts(bytes, input.pageNumbers);

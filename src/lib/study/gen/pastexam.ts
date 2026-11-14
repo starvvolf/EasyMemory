@@ -29,7 +29,7 @@ export const copyVerdictJsonSchema = z.toJSONSchema(copyVerdictSchema);
 export type PastExamEvidence = { hashes: string[]; texts: string[]; images: Array<{ label: string; dataUrl: string }> };
 export async function registeredPastExams(ids: string[]): Promise<PastExamEvidence> {
   const [{ getRegisteredMcpSource, readRegisteredMcpSourcePdf }, { extractPdfPageTexts }, { renderPageImages }] = await Promise.all([
-    import("../../mcp-source-registry.ts"), import("../../../../tools/study-forge-mcp/source-evidence.ts"), import("./pages.ts"),
+    import("../../mcp-source-registry.ts"), import("./source-evidence.ts"), import("./pages.ts"),
   ]);
   const evidence: PastExamEvidence = { hashes: [], texts: [], images: [] };
   for (const id of [...new Set(ids)]) {

@@ -6,9 +6,34 @@ import path from "node:path";
 import test from "node:test";
 import { createGen, runGen } from "./gen/runner.ts";
 import { knowledgeLayer } from "./knowledge.ts";
-import { importPayload, practiceRefs } from "./knowledge-contract.ts";
+import type { KnowledgeLayer } from "./knowledge.ts";
 import { materialMap } from "./material-map.ts";
 import { importPoints, itemsForRefs, recordByRef } from "../knowledge/store.ts";
+
+// 엔진 카드를 지식 저장소에 넣는 모양 (예전 knowledge-contract.ts, 11/15 리팩토링에서 화면 쪽 사용이 없어져 이 시험에만 남김)
+const materialOf = (deck: { sourceName?: string; title?: string }) => String(deck.sourceName || deck.title || "").replace(/\.pdf$/i, "");
+
+/** A material's knowledge points as the knowledge store takes them: ref "자료id:포인트id", folder "자료 이름/구역". */
+function importPayload(deck: { id: string; sourceName?: string; title?: string }, layer: KnowledgeLayer | undefined) {
+  const material = materialOf(deck);
+  return (layer?.points ?? []).map((point) => ({
+    ref: `${deck.id}:${point.id}`.slice(0, 200),
+    title: point.title.slice(0, 120),
+    essentials: point.essentials.slice(0, 6).map((e) => e.slice(0, 1500)),
+    folder: `${material.slice(0, 60)}${point.section ? `/${point.section.slice(0, 60)}` : ""}`,
+    material: material.slice(0, 120),
+    ...(point.pages[0] ? { page: point.pages[0] } : {}),
+    ...(point.importance ? { importance: point.importance } : {}),
+    ...(point.ask ? { ask: point.ask.slice(0, 300) } : {}),
+  }));
+}
+
+/** The refs a practice result on one question goes to: the points its objective covers. */
+function practiceRefs(deckId: string, layer: KnowledgeLayer | undefined, objectiveId: string | undefined) {
+  if (!layer || !objectiveId) return [];
+  return (layer.byObjective[objectiveId] ?? []).slice(0, 20).map((pid) => `${deckId}:${pid}`);
+}
+
 
 const pages = new Map([
   [1, "# Back-Face Detection\n- A polygon is a back face if its normal points away from the viewer\n- In a right-handed system the test is C <= 0"],

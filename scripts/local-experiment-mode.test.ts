@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  isLocalExperimentApiPath,
   isLocalExperimentRequest,
   isSameOriginExperimentMutation,
   localExperimentStatusPayload,
@@ -48,25 +47,7 @@ test("status exposes only this server PID and project root on an enabled loopbac
   }
 });
 
-test("local access is limited to experiment endpoints and same-origin writes", () => {
-  assert.equal(isLocalExperimentApiPath("/api/mcp-runs/example"), true);
-  assert.equal(isLocalExperimentApiPath("/api/mcp-experiment-requests/example"), true);
-  assert.equal(isLocalExperimentApiPath("/api/personalization-lab/example"), true);
-  assert.equal(isLocalExperimentApiPath("/api/study-executor"), true);
-  assert.equal(isLocalExperimentApiPath("/api/study-notes"), true);
-  assert.equal(isLocalExperimentApiPath("/api/room"), true);
-  assert.equal(isLocalExperimentApiPath("/api/room/room_0123456789ab/say"), true);
-  for (const path of ["/api/knowledge", "/api/knowledge/item/k_0123456789ab", "/api/code/problems", "/api/schedule/timer/start", "/api/agent/call"]) assert.equal(isLocalExperimentApiPath(path), true, path);
-  assert.equal(isLocalExperimentApiPath("/api/knowledgebase"), false);
-  assert.equal(isLocalExperimentApiPath("/api/auth/chatgpt/start"), true);
-  assert.equal(isLocalExperimentApiPath("/api/auth/chatgpt/callback"), true);
-  assert.equal(isLocalExperimentApiPath("/api/auth/chatgpt/logout"), true);
-  assert.equal(isLocalExperimentApiPath("/api/codex/status"), false);
-  assert.equal(isLocalExperimentApiPath("/api/codex/models"), false);
-  assert.equal(isLocalExperimentApiPath("/api/codex/login"), false);
-  assert.equal(isLocalExperimentApiPath("/api/codex/chat"), false);
-  assert.equal(isLocalExperimentApiPath("/api/user-data/decks"), false);
-  assert.equal(isLocalExperimentApiPath("/api/codex/private"), false);
+test("local writes must come from the same origin", () => {
   assert.equal(isSameOriginExperimentMutation(new Request("http://localhost:3000/api/mcp-runs", { method: "POST", headers: { host: "127.0.0.1:3000", origin: "http://127.0.0.1:3000" } })), true);
   assert.equal(isSameOriginExperimentMutation(new Request("http://127.0.0.1:3000/api/mcp-runs", { method: "POST", headers: { origin: "https://external.example" } })), false);
   assert.equal(isSameOriginExperimentMutation(new Request("http://127.0.0.1:3000/api/mcp-runs", { method: "POST" })), false);

@@ -15,18 +15,11 @@ type Pdfjs = { getDocument(o: { data: Uint8Array; isEvalSupported: boolean }): {
 type Page = { n: number; text: string };
 type Section = { title: string; start: number; end: number; level: number; fromOutline: boolean };
 export type StartOptions = {
-  file: File; from: number; to: number; purpose: string; note: string; readImages: boolean; engine: string;
-  autoQuestions: boolean; lecture: boolean; deep: boolean; deepFast: boolean; survey: Record<string, string | undefined>;
-  sourceName: string; pageCount: number;
+  file: File; from: number; to: number; note: string; readImages: boolean; lecture: boolean; deep: boolean; deepFast: boolean;
 };
 type Props = {
-  engineReady: boolean;
-  /** 엔진 고르기(개발용): 엔진 실험 서버(3002)나 ?engines=1 일 때만 */
-  devEngines: boolean;
-  /** 코치가 남긴 다음 자료 메모(예: "너무 지엽적") — 메모 칸의 처음 값 */
-  noteSeed?: string;
   loadPdfjs: () => Promise<Pdfjs>;
-  onStart: (o: StartOptions, doc: PdfDoc | null) => Promise<void>;
+  onStart: (o: StartOptions) => Promise<void>;
 };
 
 /** 목차(책갈피)로, 없으면 쪽마다 첫 줄로 범위 고르기 목록(AI 없이). 바닐라 readSections와 같다. */
@@ -57,24 +50,23 @@ async function readSections(doc: PdfDoc, pages: Page[]): Promise<Section[]> {
 
 type WebSource = { id: string; title: string; url?: string; readAt?: string };
 
-export default function NewMaterial({ engineReady, devEngines, noteSeed, loadPdfjs, onStart }: Props) {
+export default function NewMaterial({ loadPdfjs, onStart }: Props) {
+  const engineReady = true;
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [doc, setDoc] = useState<PdfDoc | null>(null);
+  const [, setDoc] = useState<PdfDoc | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [picked, setPicked] = useState<number[]>([]);
   const [from, setFrom] = useState(1);
   const [to, setTo] = useState(1);
-  const [note, setNote] = useState(noteSeed ?? "");
+  const [note, setNote] = useState("");
   const [readImages, setReadImages] = useState(true);
   const [lecture, setLecture] = useState(false);
   const [deep, setDeep] = useState(false);
   const [deepFast, setDeepFast] = useState(false);
-  const [engine, setEngine] = useState("recaller");
-  const [survey, setSurvey] = useState<Record<string, string | undefined>>({});
   const [webOpen, setWebOpen] = useState(false);
   const [webList, setWebList] = useState<WebSource[] | null>(null);
   const [over, setOver] = useState(false);
@@ -134,7 +126,7 @@ export default function NewMaterial({ engineReady, devEngines, noteSeed, loadPdf
     if (busy || !engineReady || !file) return;
     setBusy(true); setError(""); setStatus("PDF를 등록하고 기억 정리를 시작하는 중…");
     try {
-      await onStart({ file, from, to, purpose: "core", note: note.trim(), readImages, engine, autoQuestions: false, lecture: engine === "recaller" && lecture, deep: engine === "recaller" && deep, deepFast: deep && deepFast, survey, sourceName: file.name, pageCount: pages.length }, doc);
+      await onStart({ file, from, to, note: note.trim(), readImages, lecture, deep, deepFast });
     } catch (e) { setBusy(false); setStatus(""); setError((e as Error)?.message || "요청을 올리지 못했어요."); }
   };
 
@@ -152,7 +144,6 @@ export default function NewMaterial({ engineReady, devEngines, noteSeed, loadPdf
       <li data-on={step === 2 ? "true" : "false"}>방향 정하기</li>
       <li data-on="false">기억 정리 시작</li>
     </ol>
-    {!engineReady ? <div className="note warn">이 화면에서는 생성 요청을 보낼 수 없어요. 로컬 실험 모드에서 열어 주세요.</div> : null}
     {error ? <div className="note err" role="alert">{error}</div> : null}
     {status ? <div className="note" role="status">{status}</div> : null}
 
@@ -197,28 +188,16 @@ export default function NewMaterial({ engineReady, devEngines, noteSeed, loadPdf
       {thin ? <label className="row small" style={{ gap: 8, cursor: "pointer" }}>
         <input type="checkbox" checked={readImages} disabled={busy} onChange={(e) => setReadImages(e.target.checked)} />
         <span><b>그림·수식도 읽기</b><span className="muted"> · 글자가 적은 {thin}쪽을 그림으로 읽어요 (약 {Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 기억에 들어가요.</span></span></label> : null}
-      {engine === "recaller" ? <div className="field"><label>강의도 준비할까요?</label>
+      <div className="field"><label>강의도 준비할까요?</label>
         <div className="chat-sugs">{([[true, "O · 강의 들으며 공부"], [false, "X · 기억 카드만"]] as const).map(([on, label]) =>
           <button key={label} className="chip-btn" aria-pressed={lecture === on ? "true" : "false"} disabled={busy} onClick={() => setLecture(on)}>{label}</button>)}</div>
-        <p className="small muted">{lecture ? "자료를 다 만들면 강사가 첫 영역부터 설명을 써 둬요. 다음 영역은 읽는 동안 이어서 써요." : "아는 내용이면 카드만 보고, 강의는 나중에 자료 지도의 [강의] 탭에서 언제든 들을 수 있어요."}</p></div> : null}
-      {engine === "recaller" ? <label className="row small" style={{ gap: 8, cursor: "pointer" }}>
+        <p className="small muted">{lecture ? "자료를 다 만들면 강사가 첫 영역부터 설명을 써 둬요. 다음 영역은 읽는 동안 이어서 써요." : "아는 내용이면 카드만 보고, 강의는 나중에 자료 지도의 [강의] 탭에서 언제든 들을 수 있어요."}</p></div>
+      <label className="row small" style={{ gap: 8, cursor: "pointer" }}>
         <input type="checkbox" checked={deep} disabled={busy} onChange={(e) => setDeep(e.target.checked)} />
-        <span><b>심화 문제도 만들기</b><span className="muted"> · 개념 여러 개를 엮은 응용 문제와 단계별 풀이 (1~2분 더). 계산·절차가 있는 과목에 맞아요.</span></span></label> : null}
-      {engine === "recaller" && deep ? <label className="row small" style={{ gap: 8, cursor: "pointer", marginLeft: 24 }}>
+        <span><b>심화 문제도 만들기</b><span className="muted"> · 개념 여러 개를 엮은 응용 문제와 단계별 풀이 (1~2분 더). 계산·절차가 있는 과목에 맞아요.</span></span></label>
+      {deep ? <label className="row small" style={{ gap: 8, cursor: "pointer", marginLeft: 24 }}>
         <input type="checkbox" checked={deepFast} disabled={busy} onChange={(e) => setDeepFast(e.target.checked)} />
         <span><b>심화 빠르게</b><span className="muted"> · 초안 두 개를 동시에 써서 먼저 통과한 것을 써요. 사용량이 두 배예요.</span></span></label> : null}
-      {devEngines ? <div className="field"><label>엔진 (실험)</label>
-        <div className="chat-sugs">{[["recaller", "Recaller · 기본"], ["v2", "v2"], ["v3", "v3"], ["v5", "v5 · 자료 맞춤"], ["alpha", "Alpha · 첫 출제 품질"]].map(([key, label]) =>
-          <button key={key} className="chip-btn" aria-pressed={engine === key ? "true" : "false"} disabled={busy} onClick={() => setEngine(key)}>{label}</button>)}</div>
-        {engine === "v5" || engine === "alpha" ? <div className="row small" style={{ gap: 6, flexWrap: "wrap" }}>
-          <span className="muted">설문(선택) · 비우면 자료에 맞게 정해요</span>
-          {([["style", "시험 유형", [["recall", "암기형"], ["understand", "이해형"]]], ["exam", "시험 형태", [["choice", "객관식 위주"], ["mixed", "섞어서"], ["written", "서술 포함"]]], ["depth", "깊이", [["core", "핵심만"], ["all", "전부"]]], ["time", "시간", [["short", "빠듯함"], ["normal", "보통"], ["long", "넉넉함"]]],
-            ...(engine === "alpha" ? [["difficulty", "난이도", [["easy", "쉬움"], ["normal", "보통"], ["hard", "어려움"]]]] : [])] as Array<[string, string, string[][]]>).map(([key, label, opts]) =>
-            <select key={key} disabled={busy} value={survey[key] ?? ""} onChange={(e) => setSurvey({ ...survey, [key]: e.target.value || undefined })}>
-              <option value="">{label}</option>{opts.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>)}
-          <input placeholder="이미 아는 부분" value={survey.known ?? ""} disabled={busy} onChange={(e) => setSurvey({ ...survey, known: e.target.value || undefined })} />
-        </div> : null}
-      </div> : null}
       <div className="row">
         <button className="btn primary" id="startBtn" disabled={busy || !engineReady} onClick={() => void start()}>기억 정리 시작</button>
         <span className="small muted">바로 자료 지도로 넘어가요. 기억이 정리되는 대로 채워지고, 문제는 지도에서 원할 때 만들어요.</span>

@@ -1,21 +1,13 @@
 import "server-only";
 
 import { isLocalExperimentRequest, isSameOriginExperimentMutation } from "@/lib/local-experiment-mode";
-import { requireAuthenticatedUser, UserDataHttpError } from "@/lib/server-user";
+import { UserDataHttpError } from "@/lib/server-user";
 
-export type ExperimentPrincipal =
-  | { mode: "local-experiment"; id: "local-experiment" }
-  | { mode: "firebase-owner"; id: string };
+export type ExperimentPrincipal = { mode: "local-experiment"; id: "local-experiment" };
 
-/** Only experiment APIs may call this; it does not authorize normal cloud data routes. */
+/** Recaller는 내 PC에서만 돈다: 127.0.0.1에서 온 같은 출처 요청만 받는다 (11/15 리팩토링: Firebase 계정 길을 뺐다). */
 export async function requireExperimentPrincipal(request: Request): Promise<ExperimentPrincipal> {
-  if (isLocalExperimentRequest(request)) {
-    if (!isSameOriginExperimentMutation(request)) {
-      throw new UserDataHttpError(403, "같은 출처의 요청만 허용합니다.");
-    }
-    return { mode: "local-experiment", id: "local-experiment" };
-  }
-  const user = await requireAuthenticatedUser(request);
-  if (!user.canUseAi) throw new UserDataHttpError(403, "이 실험 기록을 사용할 권한이 없습니다.");
-  return { mode: "firebase-owner", id: user.uid };
+  if (!isLocalExperimentRequest(request)) throw new UserDataHttpError(403, "Recaller는 내 PC(127.0.0.1)에서만 쓸 수 있어요.");
+  if (!isSameOriginExperimentMutation(request)) throw new UserDataHttpError(403, "같은 출처의 요청만 허용합니다.");
+  return { mode: "local-experiment", id: "local-experiment" };
 }

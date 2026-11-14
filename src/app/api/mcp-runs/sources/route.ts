@@ -1,22 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireExperimentPrincipal } from "@/lib/local-experiment-auth";
-import { listMcpSourceCatalog } from "@/lib/mcp-source-catalog";
 import { toUserDataError } from "@/lib/server-user";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { McpSourceError, registerMcpSource } from "@/lib/mcp-source-registry";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
-  try {
-    await requireExperimentPrincipal(request);
-    return NextResponse.json({ sources: await listMcpSourceCatalog() });
-  } catch (error) {
-    const failure = toUserDataError(error, "자료 목록을 불러오지 못했습니다.");
-    return NextResponse.json({ message: failure.message }, { status: failure.status });
-  }
-}
-
+// 새 자료 넣기: PDF를 데이터 폴더에 등록한다(엔진이 sourceId로 읽는다).
 export async function POST(request: Request) {
   try {
     await requireExperimentPrincipal(request);
