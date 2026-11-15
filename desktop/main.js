@@ -133,6 +133,8 @@ function openMain() {
   // The project course server (127.0.0.1:4100: notes, new project) is local too, so it opens in a Recaller window.
   const local = (url) => url.startsWith(ORIGIN + "/") || url.startsWith(COURSE_ORIGIN + "/") || url === COURSE_ORIGIN;
   main.webContents.setWindowOpenHandler(({ url }) => {
+    // ChatGPT 로그인은 평소 브라우저에서(창 안 쿠키와 브라우저 쿠키가 달라 로그인이 끝나지 않던 것, 11/15)
+    if (url.startsWith(ORIGIN + "/api/auth/chatgpt/begin")) { shell.openExternal(url); return { action: "deny" }; }
     if (local(url)) return { action: "allow", overrideBrowserWindowOptions: { width: 1180, height: 820, autoHideMenuBar: true, title: "Recaller", webPreferences: { contextIsolation: true, sandbox: true } } };
     shell.openExternal(url); return { action: "deny" };
   });
