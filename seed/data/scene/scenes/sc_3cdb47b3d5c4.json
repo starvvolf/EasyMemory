@@ -1,0 +1,62 @@
+{
+ "id": "sc_3cdb47b3d5c4",
+ "gapId": "gap_eb1f2d98269d",
+ "format": "choice",
+ "lang": "python",
+ "distance": "near",
+ "target": "ability",
+ "story": "도시 1~n 사이에 양방향 도로 m개가 \"a b\" 꼴로 주어져요. 1번 도시에서 갈 수 있는 도시를 BFS로 찾으려고, 먼저 도시마다 바로 이어진 도시 목록 road를 만들어요(road는 도시마다 따로 만든 빈 목록이에요).",
+ "ask": "도로 한 줄 \"a b\"를 읽을 때 road에 무엇을 적어야 하나요?",
+ "explain": "양방향(서로 마찬가지인) 관계는 한 줄을 읽을 때 두 도시의 목록에 모두 적어야 해요. 한쪽만 적으면 입력 순서에 따라 갈 수 있는 도시를 놓쳐요.",
+ "setup": "",
+ "after": "",
+ "reference": "",
+ "alsoRight": [],
+ "wrongs": [
+  {
+   "id": "mine",
+   "what": "road[a].append(b)만 적어도 도로가 이어져 있으니 b에서 a로도 찾아갈 수 있다고 생각함",
+   "code": ""
+  },
+  {
+   "id": "small-only",
+   "what": "번호가 작은 도시 목록에만 적으면 된다고 생각함",
+   "code": ""
+  },
+  {
+   "id": "start-only",
+   "what": "출발 도시(1번)와 이어진 도로만 적으면 된다고 생각함",
+   "code": ""
+  }
+ ],
+ "inputs": [],
+ "choices": [
+  {
+   "text": "road[a].append(b) 와 road[b].append(a) 를 둘 다 한다",
+   "thought": "right"
+  },
+  {
+   "text": "road[a].append(b) 만 한다 — 도로는 이어져 있으니 b에서도 a로 간다",
+   "thought": "mine"
+  },
+  {
+   "text": "a, b 중 번호가 작은 쪽 목록에만 큰 쪽을 적는다",
+   "thought": "small-only"
+  },
+  {
+   "text": "a나 b가 1번일 때만 그 도로를 적는다",
+   "thought": "start-only"
+  }
+ ],
+ "topic": "graph.undirected-both",
+ "createdAt": "2026-11-15T13:20:17.700Z",
+ "madeBy": "ai",
+ "computed": {
+  "expected": [],
+  "shapes": {}
+ },
+ "check": {
+  "ok": true,
+  "problems": []
+ }
+}

@@ -22,6 +22,20 @@ const killTree = (child) => {
 // 데이터: 이 폴더의 data/ (환경 변수로 바꿀 수 있음). 처음 켤 때 만든다.
 const DATA = path.resolve(root, process.env.STUDY_FORGE_DATA_DIR || "data");
 const COURSE_DATA = path.resolve(process.env.PC_DATA_DIR || path.join(DATA, "course"));
+// 처음 켤 때(데이터가 비어 있으면) 예시 하나씩을 넣는다: 자료(직접 만든 BFS·DFS 강의 노트 9쪽) · 알고리즘(내장 문제를 틀렸다 맞힌 기록 + 총정리 + 상황 재현).
+// 예시는 저장소의 seed/data. 한 번만 넣고(.seeded), 지운 뒤에는 다시 넣지 않는다.
+function seedOnce() {
+  const mark = path.join(DATA, ".seeded");
+  const src = path.join(root, "seed", "data");
+  try {
+    if (fs.existsSync(mark) || !fs.existsSync(src)) return;
+    const used = fs.existsSync(DATA) && fs.readdirSync(DATA).some((n) => n !== "course" && !n.startsWith("."));
+    if (!used) fs.cpSync(src, DATA, { recursive: true });
+    fs.mkdirSync(DATA, { recursive: true });
+    fs.writeFileSync(mark, new Date().toISOString());
+  } catch { /* 예시 없이 시작 */ }
+}
+seedOnce();
 fs.mkdirSync(COURSE_DATA, { recursive: true });
 // ChatGPT 로그인 토큰은 암호화해 둔다. 열쇠는 데이터 폴더가 아니라 사용자 홈에(데이터 폴더를 남에게 줘도 토큰은 못 씀).
 function tokenKey() {

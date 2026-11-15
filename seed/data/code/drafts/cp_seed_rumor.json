@@ -1,0 +1,3 @@
+{
+ "python": "import sys\nfrom collections import deque\ninput = sys.stdin.readline\n\nn = int(input())\nm = int(input())\ngraph = [[]] * (n + 1)\nfor _ in range(m):\n    a, b = map(int, input().split())\n    graph[a].append(b)\n\nvisited = [False] * (n + 1)\nq = deque([1])\nvisited[1] = True\ncount = 0\nwhile q:\n    v = q.popleft()\n    for w in graph[v]:\n        if not visited[w]:\n            visited[w] = True\n            count += 1\n            q.append(w)\nprint(count)\n"
+}

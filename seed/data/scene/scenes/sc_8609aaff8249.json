@@ -1,0 +1,81 @@
+{
+ "id": "sc_8609aaff8249",
+ "gapId": "gap_7b8474880c62",
+ "format": "blank",
+ "lang": "python",
+ "distance": "near",
+ "target": "ability",
+ "story": "도서관에 1번부터 k번까지 서가가 있어요. 책 m권이 \"서가 번호 책이름\"으로 들어오면 서가마다 책 목록에 담고, 마지막에 1번부터 k번 서가의 책 수를 출력하려고 해요.",
+ "ask": "빈칸을 채워 서가마다 책 목록이 제대로 생기게 하세요.",
+ "explain": "목록의 목록은 칸마다 새 빈 목록을 만들어야 해요. [[]] * (k + 1)은 빈 목록 하나를 모든 칸이 같이 써서, 한 서가에 넣은 책이 모든 서가에 보여요.",
+ "setup": "import sys\ninput = sys.stdin.readline\nk, m = map(int, input().split())",
+ "after": "print(' '.join(str(len(shelf[i])) for i in range(1, k + 1)))",
+ "template": "shelf = ____\nfor _ in range(m):\n    r, title = input().split()\n    shelf[int(r)].append(title)",
+ "reference": "[[] for _ in range(k + 1)]",
+ "alsoRight": [
+  "[list() for _ in range(k + 1)]"
+ ],
+ "wrongs": [
+  {
+   "id": "mine",
+   "what": "[[]] * (k + 1)이면 서가마다 빈 목록이 따로 생긴다고 생각함",
+   "code": "[[]] * (k + 1)"
+  },
+  {
+   "id": "one-short",
+   "what": "서가 번호가 1부터인데 k칸만 만듦",
+   "code": "[[] for _ in range(k)]"
+  }
+ ],
+ "inputs": [
+  {
+   "role": "split",
+   "stdin": "1 2\n1 alpha\n1 beta\n",
+   "label": "기본: 서가 하나"
+  },
+  {
+   "role": "split",
+   "stdin": "3 4\n1 a\n2 b\n2 c\n3 d\n",
+   "label": "가르기: 서가마다 다름"
+  },
+  {
+   "role": "split",
+   "stdin": "2 1\n2 x\n",
+   "label": "가르기: 한 서가만"
+  },
+  {
+   "role": "split",
+   "stdin": "4 3\n4 p\n1 q\n4 r\n",
+   "label": "가르기: 빈 서가 있음"
+  }
+ ],
+ "topic": "list.nested-init",
+ "createdAt": "2026-11-15T13:20:17.698Z",
+ "madeBy": "ai",
+ "computed": {
+  "expected": [
+   "2",
+   "1 2 1",
+   "0 1",
+   "1 0 0 2"
+  ],
+  "shapes": {
+   "mine": [
+    "2",
+    "4 4 4",
+    "1 1",
+    "3 3 3 3"
+   ],
+   "one-short": [
+    "\u0000RE:IndexError",
+    "\u0000RE:IndexError",
+    "\u0000RE:IndexError",
+    "\u0000RE:IndexError"
+   ]
+  }
+ },
+ "check": {
+  "ok": true,
+  "problems": []
+ }
+}

@@ -1,0 +1,4 @@
+{"id":"ev_06b9b3115efb","at":"2026-11-15T13:19:39.126Z","knowledgeId":"k_cc0759479274","kind":"met","detail":"처음 만남","source":{"kind":"code","title":"소문이 퍼진 사람 수","ref":"cp_seed_rumor"}}
+{"id":"ev_430f60db0b6f","at":"2026-11-15T13:19:39.126Z","knowledgeId":"k_cc0759479274","kind":"asked","detail":"저장하면서 몰랐음으로 표시"}
+{"id":"ev_78f00f5c3493","at":"2026-11-15T13:19:39.128Z","knowledgeId":"k_f9ac9a687e74","kind":"met","detail":"처음 만남","source":{"kind":"code","title":"소문이 퍼진 사람 수","ref":"cp_seed_rumor"}}
+{"id":"ev_90a9e301656c","at":"2026-11-15T13:19:39.128Z","knowledgeId":"k_f9ac9a687e74","kind":"asked","detail":"저장하면서 몰랐음으로 표시"}

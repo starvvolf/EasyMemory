@@ -1,0 +1,66 @@
+{
+ "version": 1,
+ "folders": [],
+ "items": [
+  {
+   "id": "k_cc0759479274",
+   "title": "빈 목록을 칸마다 따로 만들기",
+   "body": "목록의 목록은 칸마다 새 빈 목록을 만들어야 한다([[] for _ in range(k)]). [[]] * k는 같은 목록 하나를 k칸이 같이 쓴다.\n그때 생각: graph = [[]] * (n + 1)로 정점마다 빈 목록이 생긴다고 생각했어요",
+   "folderId": null,
+   "state": "unknown",
+   "graduated": false,
+   "aliases": [],
+   "links": [],
+   "sources": [
+    {
+     "kind": "code",
+     "title": "소문이 퍼진 사람 수",
+     "ref": "cp_seed_rumor",
+     "at": "2026-11-15T13:19:39.126Z"
+    }
+   ],
+   "stats": {
+    "asked": 0,
+    "wrong": 0,
+    "hint": 0,
+    "correct": 0,
+    "correctDays": []
+   },
+   "createdAt": "2026-11-15T13:19:39.128Z",
+   "updatedAt": "2026-11-15T13:19:39.126Z",
+   "lastAt": "2026-11-15T13:19:39.126Z",
+   "ask": "빈 목록을 칸마다 따로 만들기 — 무엇을 떠올려야 할까요?",
+   "topicHint": "list.nested-init"
+  },
+  {
+   "id": "k_f9ac9a687e74",
+   "title": "방향 없는 관계는 양쪽 목록에",
+   "body": "서로 마찬가지인(방향 없는) 관계는 한 쌍을 읽을 때 두 정점의 목록에 모두 적어야 한다.\n그때 생각: graph[a].append(b)만 하면 a와 b가 서로 찾아갈 수 있다고 생각했어요",
+   "folderId": null,
+   "state": "unknown",
+   "graduated": false,
+   "aliases": [],
+   "links": [],
+   "sources": [
+    {
+     "kind": "code",
+     "title": "소문이 퍼진 사람 수",
+     "ref": "cp_seed_rumor",
+     "at": "2026-11-15T13:19:39.128Z"
+    }
+   ],
+   "stats": {
+    "asked": 0,
+    "wrong": 0,
+    "hint": 0,
+    "correct": 0,
+    "correctDays": []
+   },
+   "createdAt": "2026-11-15T13:19:39.129Z",
+   "updatedAt": "2026-11-15T13:19:39.128Z",
+   "lastAt": "2026-11-15T13:19:39.128Z",
+   "ask": "방향 없는 관계는 양쪽 목록에 — 무엇을 떠올려야 할까요?",
+   "topicHint": "graph.undirected-both"
+  }
+ ]
+}

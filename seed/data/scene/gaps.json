@@ -1,0 +1,125 @@
+[
+ {
+  "id": "gap_7b8474880c62",
+  "branch": "algo",
+  "kind": "자료 구현",
+  "layer": 3,
+  "title": "빈 목록을 칸마다 따로 만들기",
+  "target": "ability",
+  "missed": "목록의 목록은 칸마다 새 빈 목록을 만들어야 한다([[] for _ in range(k)]). [[]] * k는 같은 목록 하나를 k칸이 같이 쓴다.",
+  "wrong": "graph = [[]] * (n + 1)로 정점마다 빈 목록이 생긴다고 생각했어요",
+  "wrongCode": "import sys\nfrom collections import deque\ninput = sys.stdin.readline\n\nn = int(input())\nm = int(input())\ngraph = [[]] * (n + 1)\nfor _ in range(m):\n    a, b = map(int, input().split())\n    graph[a].append(b)\n    graph[b].append(a)\n\nvisited = [False] * (n + 1)\nq = deque([1])\nvisited[1] = True\ncount = 0\nwhile q:\n    v = q.popleft()\n    for w in graph[v]:\n        if not visited[w]:\n            visited[w] = True\n            count += 1\n            q.append(w)\nprint(count)\n",
+  "wrongVerified": true,
+  "wrongVerdict": "WA",
+  "kernel": {
+   "lang": "python",
+   "code": "graph = [[] for _ in range(n + 1)]\ngraph[1].append(2)\nprint(graph[1], graph[2])  # [2] []",
+   "needs": [
+    "n: 정점 수"
+   ]
+  },
+  "evidence": [
+   {
+    "type": "submission",
+    "id": "sub_dcd5b3e4cb",
+    "verdict": "WA",
+    "lines": [
+     7,
+     7
+    ]
+   },
+   {
+    "type": "talk",
+    "at": "2026-11-15T13:14:26.187Z",
+    "quote": "정점마다 이웃 목록이 정말 \"따로\" 하나씩 생겼는지"
+   }
+  ],
+  "origin": {
+   "problemId": "cp_seed_rumor",
+   "title": "소문이 퍼진 사람 수",
+   "lang": "python"
+  },
+  "topic": "list.nested-init",
+  "scope": "piece",
+  "dose": {
+   "level": 2
+  },
+  "state": {
+   "distance": "near",
+   "passes": 0,
+   "sameMistakes": 0,
+   "unclear": 0,
+   "otherMistakes": 0,
+   "known": false,
+   "due": "2026-11-16T13:19:39.012Z",
+   "streak": {
+    "same": 0,
+    "unclear": 0
+   }
+  },
+  "createdAt": "2026-11-15T13:19:39.012Z",
+  "knowledgeId": "k_cc0759479274"
+ },
+ {
+  "id": "gap_eb1f2d98269d",
+  "branch": "algo",
+  "kind": "자료 담기",
+  "layer": 2,
+  "title": "방향 없는 관계는 양쪽 목록에",
+  "target": "ability",
+  "missed": "서로 마찬가지인(방향 없는) 관계는 한 쌍을 읽을 때 두 정점의 목록에 모두 적어야 한다.",
+  "wrong": "graph[a].append(b)만 하면 a와 b가 서로 찾아갈 수 있다고 생각했어요",
+  "wrongCode": "import sys\nfrom collections import deque\ninput = sys.stdin.readline\n\nn = int(input())\nm = int(input())\ngraph = [[] for _ in range(n + 1)]\nfor _ in range(m):\n    a, b = map(int, input().split())\n    graph[a].append(b)\n\nvisited = [False] * (n + 1)\nq = deque([1])\nvisited[1] = True\ncount = 0\nwhile q:\n    v = q.popleft()\n    for w in graph[v]:\n        if not visited[w]:\n            visited[w] = True\n            count += 1\n            q.append(w)\nprint(count)\n",
+  "wrongVerified": true,
+  "wrongVerdict": "WA",
+  "kernel": {
+   "lang": "python",
+   "code": "for _ in range(m):\n    a, b = map(int, input().split())\n    graph[a].append(b)\n    graph[b].append(a)",
+   "needs": [
+    "m: 간선 수",
+    "graph: 정점마다 따로 만든 빈 목록"
+   ]
+  },
+  "evidence": [
+   {
+    "type": "submission",
+    "id": "sub_4e9dcc9ee5",
+    "verdict": "WA",
+    "lines": [
+     9,
+     10
+    ]
+   },
+   {
+    "type": "talk",
+    "at": "2026-11-15T13:16:46.687Z",
+    "quote": "한 쌍을 읽을 때 두 사람 쪽에 모두 적어야 해요"
+   }
+  ],
+  "origin": {
+   "problemId": "cp_seed_rumor",
+   "title": "소문이 퍼진 사람 수",
+   "lang": "python"
+  },
+  "topic": "graph.undirected-both",
+  "scope": "piece",
+  "dose": {
+   "level": 2
+  },
+  "state": {
+   "distance": "near",
+   "passes": 0,
+   "sameMistakes": 0,
+   "unclear": 0,
+   "otherMistakes": 0,
+   "known": false,
+   "due": "2026-11-16T13:19:39.118Z",
+   "streak": {
+    "same": 0,
+    "unclear": 0
+   }
+  },
+  "createdAt": "2026-11-15T13:19:39.118Z",
+  "knowledgeId": "k_f9ac9a687e74"
+ }
+]

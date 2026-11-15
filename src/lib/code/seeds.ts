@@ -22,10 +22,30 @@ export const SEED_KNOWLEDGE: Record<string, string> = {
   "누적 합": "앞에서부터의 합 S[i]를 미리 만들어 두면 l~r 구간의 합을 S[r] - S[l-1] 한 번으로 구한다.",
   "자료형 범위(오버플로)": "int는 약 21억(2^31-1)까지만 담는다. 합이 이를 넘을 수 있으면 C++·C#은 long long/long을 쓴다.",
   "투 포인터": "정렬된 배열의 양 끝(또는 같은 쪽)에 둔 두 위치를 조건에 따라 옮기며, 모든 쌍을 보지 않고 답을 찾는 방법. O(N).",
+  "BFS": "큐로 시작점에서 가까운 정점부터 차례로 찾는 그래프 탐색. 간선 가중치가 같으면 처음 닿은 때가 최단 거리.",
+  "인접 리스트": "정점마다 이웃 목록을 하나씩 두어 그래프를 담는 방법. 방향 없는 간선은 양쪽 목록에 모두 적고, 빈 목록은 칸마다 따로 만든다.",
+  "방문 표시": "이미 찾은 정점을 visited에 적어 두고 다시 넣지 않는 것. 큐에 넣을 때 표시해야 같은 정점이 두 번 줄에 서지 않는다.",
   "탐색 범위의 경계": "이분 탐색에서 반복 조건(st <= en)과 범위 줄이기(st = mid + 1, en = mid - 1)를 맞게 잡아야 마지막 후보를 빠뜨리거나 무한 반복하지 않는다.",
 };
 
 export const SEEDS: Seed[] = [
+  {
+    id: "cp_seed_rumor", title: "소문이 퍼진 사람 수", kind: "full", folder: "알고리즘/그래프 탐색", knowledge: ["BFS", "인접 리스트", "방문 표시"],
+    statement: "어느 동아리에 1번부터 N번까지 N명이 있고, 서로 아는 사이인 두 사람이 M쌍 주어진다(아는 사이는 서로 마찬가지다). 1번이 소문을 냈고, 소문은 아는 사이를 따라 퍼진다.\n\n1번에게서 소문을 듣게 되는 사람이 1번을 빼고 몇 명인지 구하자.",
+    inputText: "첫 줄에 N (1 ≤ N ≤ 100,000)\n둘째 줄에 M (0 ≤ M ≤ 200,000)\n다음 M줄에 아는 사이인 두 사람의 번호 a b (a ≠ b)",
+    outputText: "1번을 빼고 소문을 듣게 되는 사람 수를 출력한다.",
+    exampleInputs: ["7\n6\n1 2\n2 3\n1 5\n5 2\n5 6\n4 7\n", "3\n1\n2 1\n"],
+    testInputs: () => {
+      const r = rng(77); const out: string[] = [];
+      for (const [n, m] of [[1, 0], [2, 1], [5, 3], [10, 6], [100, 80], [2000, 2500], [100000, 200000]] as const) {
+        const edges: string[] = [];
+        for (let k = 0; k < m; k++) { const a = int(r, 1, n); let b = int(r, 1, n); if (b === a) b = a === n ? 1 : a + 1; if (n === 1) break; edges.push(r() < 0.5 ? `${a} ${b}` : `${b} ${a}`); }
+        out.push(`${n}\n${edges.length}\n${edges.join("\n")}${edges.length ? "\n" : ""}`);
+      }
+      return out;
+    },
+    reference: `${READ_JS}const n = d[p++]; const m = d[p++]; const g = Array.from({ length: n + 1 }, () => []);\nfor (let k = 0; k < m; k++) { const a = d[p++], b = d[p++]; g[a].push(b); g[b].push(a); }\nconst seen = new Uint8Array(n + 1); seen[1] = 1; const q = [1]; let c = 0;\nfor (let h = 0; h < q.length; h++) { for (const w of g[q[h]]) if (!seen[w]) { seen[w] = 1; c++; q.push(w); } }\nconsole.log(c);\n`,
+  },
   {
     id: "cp_seed_find_cards", title: "가진 카드 확인하기", kind: "full", folder: "알고리즘/이분 탐색", knowledge: ["이분 탐색", "정렬"],
     statement: "정수가 하나씩 적힌 카드 N장을 가지고 있다. 정수 M개가 주어질 때, 각 정수가 적힌 카드를 가지고 있는지 확인하자.\n\nN과 M이 커서 하나하나 다 비교하면 늦다. 카드를 정렬해 두고 절반씩 버리며 찾는 방법을 떠올려 보자.",

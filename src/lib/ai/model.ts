@@ -183,7 +183,9 @@ const relayBackend: ModelBackend = {
 const backends = { chatgpt: chatgptBackend, codex: codexBackend, fake: fakeBackend, relay: relayBackend } as const;
 
 export function modelBackend(provider?: ModelRequest["provider"]): ModelBackend {
-  const name = (provider ?? process.env.STUDY_FORGE_MODEL_PROVIDER ?? "chatgpt").trim() as keyof typeof backends;
+  // 중계 시험(relay)은 앱 전체를 맡는다: 자료 엔진처럼 provider: "chatgpt"를 따로 적어 보내는 호출도 중계로(가짜 모델 시험은 그대로).
+  const env = process.env.STUDY_FORGE_MODEL_PROVIDER?.trim();
+  const name = (env === "relay" && provider !== "fake" ? "relay" : (provider ?? env ?? "chatgpt")).trim() as keyof typeof backends;
   return backends[name] ?? chatgptBackend;
 }
 
