@@ -82,6 +82,13 @@ export async function startMaterial(o: { file: File; from: number; to: number; n
   return gen.id;
 }
 
+/** 붙여 넣은 글로 기억 정리를 시작한다(11/15). 돌려주는 값은 새 실행 id(같은 글이면 그 실행). */
+export async function startText(o: { title: string; text: string; note: string; lecture: boolean }): Promise<string> {
+  const { gen } = await call<{ gen: { id: string } }>("/api/study-map/text-source", { title: o.title, text: o.text, note: o.note.slice(0, 2000), ...(o.lecture ? { lecture: true } : {}) });
+  await refreshMaterials();
+  return gen.id;
+}
+
 /** 멈춘 실행을 멈춘 곳부터 */
 export async function resumeMaterial(genId: string) {
   await call(`/api/lab/gen/${genId}/continue`, { confirmed: true });

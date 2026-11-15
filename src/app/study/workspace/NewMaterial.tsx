@@ -14,12 +14,15 @@ type PdfDoc = {
 type Pdfjs = { getDocument(o: { data: Uint8Array; isEvalSupported: boolean }): { promise: Promise<PdfDoc> } };
 type Page = { n: number; text: string };
 type Section = { title: string; start: number; end: number; level: number; fromOutline: boolean };
+export type StartTextOptions = { title: string; text: string; note: string; lecture: boolean };
 export type StartOptions = {
   file: File; from: number; to: number; note: string; lecture: boolean;
 };
 type Props = {
   loadPdfjs: () => Promise<Pdfjs>;
   onStart: (o: StartOptions) => Promise<void>;
+  /** 붙여 넣은 글로 시작(11/15). 없으면 글 칸을 숨긴다. */
+  onStartText?: (o: StartTextOptions) => Promise<void>;
 };
 
 /** 목차(책갈피)로, 없으면 쪽마다 첫 줄로 범위 고르기 목록(AI 없이). 바닐라 readSections와 같다. */
@@ -50,7 +53,7 @@ async function readSections(doc: PdfDoc, pages: Page[]): Promise<Section[]> {
 
 type WebSource = { id: string; title: string; url?: string; readAt?: string };
 
-export default function NewMaterial({ loadPdfjs, onStart }: Props) {
+export default function NewMaterial({ loadPdfjs, onStart, onStartText }: Props) {
   const engineReady = true;
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -67,6 +70,8 @@ export default function NewMaterial({ loadPdfjs, onStart }: Props) {
   const [webOpen, setWebOpen] = useState(false);
   const [webList, setWebList] = useState<WebSource[] | null>(null);
   const [over, setOver] = useState(false);
+  const [textTitle, setTextTitle] = useState("");
+  const [text, setText] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const pdfjs = useRef<Pdfjs | null>(null);
 
@@ -127,6 +132,13 @@ export default function NewMaterial({ loadPdfjs, onStart }: Props) {
     } catch (e) { setBusy(false); setStatus(""); setError((e as Error)?.message || "요청을 올리지 못했어요."); }
   };
 
+  const startWithText = async () => {
+    if (busy || !onStartText || text.trim().length < 20) return;
+    setBusy(true); setError(""); setStatus("글을 쪽으로 나누고 기억 정리를 시작하는 중…");
+    try { await onStartText({ title: textTitle.trim(), text, note: note.trim(), lecture }); }
+    catch (e) { setBusy(false); setStatus(""); setError((e as Error)?.message || "요청을 올리지 못했어요."); }
+  };
+
   const onDrop = (e: DragEvent) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.name)) void readPdf(f); };
   const step = pages.length ? 2 : 1;
   const span = to - from + 1;
@@ -158,6 +170,22 @@ export default function NewMaterial({ loadPdfjs, onStart }: Props) {
         </div> : null}
       </div>
     </section>
+
+    {/* 글 붙여 넣기(11/15 사용자 "그냥 글 해가지고 입력창 하나"): 강의 노트 · 정리 글 · 기사 본문을 붙여 넣으면 PDF와 같은 길로 기억을 만든다 */}
+    {onStartText && !pages.length ? <section className="panel stack">
+      <div><p className="eyebrow">또는 글 붙여 넣기</p><h2 style={{ fontSize: 18, marginTop: 2 }}>강의 노트 · 정리 글 · 본문을 그대로 붙여 넣어요</h2></div>
+      <div className="field"><label htmlFor="textTitle">제목 (선택)</label>
+        <input id="textTitle" type="text" maxLength={200} placeholder="비우면 첫 줄로 정해요" value={textTitle} onChange={(e) => setTextTitle(e.target.value)} disabled={busy} /></div>
+      <div className="field"><label htmlFor="textBody">글</label>
+        <textarea id="textBody" rows={10} placeholder="여기에 글을 붙여 넣으세요. 문단(빈 줄)을 기준으로 쪽을 나눠요." value={text} onChange={(e) => setText(e.target.value)} disabled={busy} />
+        <span className="small muted">{text.trim() ? `${text.trim().length.toLocaleString()}자 · 약 ${Math.max(1, Math.round(text.trim().length / 1800))}쪽` : "20자 이상"}</span></div>
+      <div className="field"><label htmlFor="textNote">메모 (선택)</label>
+        <textarea id="textNote" rows={2} placeholder="예: 시험 범위, 용어는 원문 그대로" value={note} onChange={(e) => setNote(e.target.value)} disabled={busy} /></div>
+      <div className="row">
+        <button className="btn primary" disabled={busy || text.trim().length < 20} onClick={() => void startWithText()}>이 글로 기억 정리 시작</button>
+        <span className="small muted">PDF와 같은 순서로 기억 카드를 만들어요.</span>
+      </div>
+    </section> : null}
 
     {pages.length ? <section className="panel stack">
       <div><p className="eyebrow">방향 정하기</p><h2 style={{ fontSize: 18, marginTop: 2 }}>어떻게 공부할지 알려 주세요</h2></div>

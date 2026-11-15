@@ -12,7 +12,7 @@ import MaterialList from "./workspace/MaterialList";
 import NewMaterial from "./workspace/NewMaterial";
 import SourcePeek, { loadPdfjs, openPeek } from "./workspace/SourcePeek";
 import { setBranch, shelfSel } from "./workspace/shelf";
-import { refreshMaterials, startMaterial } from "./workspace/materials";
+import { refreshMaterials, startMaterial, startText } from "./workspace/materials";
 
 const TodayBoard = lazy(() => import("./workspace/TodayBoard"));
 const Library = lazy(() => import("./workspace/Library"));
@@ -191,12 +191,17 @@ export default function StudyShell() {
             {keep("plan", <PlanView />)}
             {view === "create" ? (
               <>
-                <div className="study-nav"><button className="btn ghost small" onClick={() => setView("practice")}>← PDF 자료</button><span className="small muted">PDF · 강의 자료 넣기</span></div>
+                <div className="study-nav"><button className="btn ghost small" onClick={() => setView("practice")}>← PDF 자료</button><span className="small muted">PDF · 글 자료 넣기</span></div>
                 <div className="view-host view-create">
                   <NewMaterial key={createKey} loadPdfjs={loadPdfjs as never} onStart={async (o) => {
                     const genId = await startMaterial(o);
                     setCreateKey((k) => k + 1);
                     say("기억 정리를 시작했어요. 정리되는 대로 자료 지도에 채워져요.");
+                    setBranch("material"); shelfSel.set(`gen:${genId}`); setView("practice");
+                  }} onStartText={async (o) => {
+                    const genId = await startText(o);
+                    setCreateKey((k) => k + 1);
+                    say("글로 기억 정리를 시작했어요. 정리되는 대로 자료 지도에 채워져요.");
                     setBranch("material"); shelfSel.set(`gen:${genId}`); setView("practice");
                   }} />
                 </div>
