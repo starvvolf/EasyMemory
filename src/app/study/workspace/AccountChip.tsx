@@ -26,6 +26,20 @@ export default function AccountChip() {
   const ready = Boolean(info?.model.ready);
   const connect = async () => {
     setBusy(true); setNote("");
+    // 데스크톱 창(11/15): 로그인은 평소 브라우저에서 한다. 창 안에서 시작하면 확인 쿠키가 창에만 있어 브라우저 쪽 로그인이 끝나지 않았다(여는 중… 멈춤).
+    // 브라우저가 /begin부터 열고(창의 desktop/main.js가 바깥 브라우저로 넘김), 이 창은 몇 초마다 연결됐는지 본다.
+    if (document.documentElement.dataset.shell === "desktop") {
+      window.open("/api/auth/chatgpt/begin", "_blank");
+      setBusy(false); setOpen(true);
+      setNote("평소 쓰는 브라우저에 ChatGPT 로그인이 열렸어요. 로그인을 마치고 이 창으로 돌아오면 연결돼요.");
+      let n = 0;
+      const tick = window.setInterval(() => {
+        n++;
+        void call<Info>("/api/auth/chatgpt/status").then((x) => { setInfo(x); if (x.model.ready) { window.clearInterval(tick); setNote(""); setOpen(false); } }).catch(() => undefined);
+        if (n > 100) window.clearInterval(tick);
+      }, 3000);
+      return;
+    }
     try { const { url } = await call<{ url: string }>("/api/auth/chatgpt/start", {}); window.location.assign(url); }
     catch (e) { setNote(errorText(e) || "ChatGPT 로그인을 시작하지 못했어요."); setBusy(false); }
   };
