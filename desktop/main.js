@@ -108,6 +108,8 @@ async function startApp() {
     splashTitle("처음 한 번 화면을 만들어요 · 1분쯤 걸려요");
     splashLine("① 화면 만들기(next build)\n");
     if (await run(q(process.env.RECALLER_NODE || "node"), [q(nextBin()), "build"]) !== 0) { splashLine("\n화면을 만들지 못했어요.\n"); return 1; }
+    // 빌드 캐시(약 70MB)는 다음 빌드를 조금 빠르게 할 뿐이라 지운다(배포판은 작게)
+    try { fs.rmSync(path.join(root, ".next", "cache"), { recursive: true, force: true }); } catch { /* 남아도 됨 */ }
     splashTitle("켜는 중이에요 · 앱 서버와 실습 서버를 켜요");
   }
   splashLine(`② 앱 서버 켜기(127.0.0.1:${PORT}) · 데이터: ${DATA}\n`);

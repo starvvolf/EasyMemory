@@ -30,48 +30,78 @@
 
 자세한 그림: [docs/구조도](docs/구조도/구조도.html) · 동작 설명: [docs](docs)
 
-기술: Next.js 16 · React 19 · TypeScript · Electron 33 · Node.js 24 · pdf.js · Transformers.js(EmbeddingGemma) · OpenCode SDK
+기술: Next.js 16 · React 19 · TypeScript · Electron 33 · Node.js 24 · pdf.js · OpenCode SDK
 
-## 켜기 (Windows)
+## 설치와 켜기 (Windows)
 
-### 필요한 것
+### 1. 먼저 깔 것
 
-| 무엇 | 왜 |
+| 무엇 | 왜 | 받는 곳 |
+|---|---|---|
+| **Node.js 24 LTS** | 앱 실행 (22·23이어도 되지만, 그러면 실습 튜터용 Node 24를 따로 180MB 더 받습니다) | https://nodejs.org |
+| **Python 3** | 알고리즘 채점 · 상황 재현 (설치할 때 "Add python.exe to PATH" 체크) | https://www.python.org |
+| **VS Code** | 실습 (고치기는 VS Code에서 합니다) | https://code.visualstudio.com |
+| ChatGPT 계정 | AI 기능 (앱 안에서 로그인) | — |
+| (선택) g++ · .NET SDK | C++ · C#으로 풀 때만 | — |
+
+### 2. 받기
+
+- Git이 있으면: `git clone <이 저장소 주소>`
+- 없으면: GitHub 페이지의 **Code → Download ZIP**으로 받아 풀어 둡니다. 폴더 이름 · 위치는 마음대로 해도 됩니다.
+
+### 3. 켜기
+
+**`Recaller 켜기.cmd`** 를 더블클릭합니다.
+
+처음 한 번은 아래를 저절로 합니다(인터넷 속도에 따라 5~10분).
+
+| 순서 | 하는 일 |
 |---|---|
-| Windows 10/11, [Node.js 24](https://nodejs.org) | 앱 실행 |
-| ChatGPT 계정 | AI 기능 (앱 안에서 로그인) |
-| Python 3 | 알고리즘 채점 · 상황 재현 |
-| VS Code | 실습 |
-| (선택) g++, .NET | C++ · C#으로 풀 때 |
+| 1 | 앱 패키지 설치 (`npm install`) |
+| 2 | 데스크톱 창(Electron) 설치 |
+| 3 | 실습 튜터(OpenCode) 설치 |
+| 4 | 창이 뜨고, 화면을 한 번 빌드 (1분쯤) |
 
-### 처음 켜기
+그다음부터는 10초 안팎으로 켜집니다. 코드를 고쳤으면 다음에 켤 때 저절로 다시 빌드합니다.
 
-1. 이 저장소를 받습니다(`git clone` 또는 ZIP).
-2. **`Recaller 켜기.cmd`** 를 더블클릭합니다.
-   - 처음 한 번 패키지 · 데스크톱 창 · 실습 튜터를 설치하고 화면을 빌드합니다(인터넷 속도에 따라 수 분).
-   - 그다음부터는 바로 켜집니다.
-3. 창이 뜨면 화면 위 **[ChatGPT 로그인]** 을 누릅니다. 로그인은 평소 쓰는 브라우저에서 열리고, 끝나면 창으로 돌아와 새로 고침(Ctrl+R)합니다.
+### 4. 로그인
 
-창을 닫으면 확인한 뒤 서버를 모두 끕니다.
+창이 뜨면 화면 위 **[ChatGPT 로그인]** 을 누릅니다. 로그인은 평소 쓰는 브라우저에서 열리고, 끝나면 창으로 돌아와 새로 고침(Ctrl+R)합니다.
 
-### 데이터
+### 끄기
 
-- 공부 기록 · 넣은 PDF · 로그인 정보는 **이 폴더의 `data/`에만** 저장됩니다. 어디로도 올리지 않습니다.
+창을 닫으면 확인한 뒤 앱 서버 · 실습 서버를 모두 끕니다.
+
+### 안 켜질 때
+
+| 보이는 것 | 할 것 |
+|---|---|
+| "Node.js가 없어요" | Node.js 24를 깔고 다시 켜기 (깐 뒤 창을 새로 열어야 인식됩니다) |
+| "설치하지 못했어요" | 인터넷 확인 후 다시 켜기. 계속되면 `node_modules` 폴더를 지우고 다시 |
+| "앱 서버가 꺼졌어요 … 포트" | 다른 프로그램이 3000 · 4100을 쓰는 중. 그 프로그램을 끄거나, `RECALLER_PORT` · `PROJECT_COURSE_URL` 환경 변수로 다른 포트 |
+| 알고리즘 채점이 안 됨 | Python이 PATH에 있는지 (`python --version`) |
+
+## 데이터
+
+- 공부 기록 · 넣은 PDF · 로그인 정보는 **이 폴더의 `data/`에만** 저장됩니다. 어디로도 올리지 않습니다(창 메뉴 → 데이터 폴더 열기).
 - 로그인 토큰은 암호화해 두고, 열쇠는 사용자 폴더(`~/.study-forge`)에 따로 둡니다.
 - 처음부터 다시: 앱을 끄고 `data/` 폴더 이름을 바꾸면 빈 상태로 켜집니다.
+- 다른 폴더에 두려면 `STUDY_FORGE_DATA_DIR` 환경 변수.
 
-### 용량
+## 용량
 
-| 무엇 | 크기 |
-|---|---|
-| 저장소 (코드 · 문서) | 약 7MB |
-| 앱 패키지 (`node_modules`) | 약 1.2GB |
-| 데스크톱 창 (Electron) | 약 270MB |
-| 빌드한 화면 (`.next`) | 약 100MB |
-| 실습 튜터 (Node 24 · OpenCode) | 약 0.2~0.3GB |
-| 기억 비교 모델 (처음 쓸 때 받음) | 약 300MB |
+GitHub에 올라가는 것은 코드뿐입니다(약 7MB). 나머지는 켤 때 내 PC에 설치됩니다.
 
-합쳐서 약 2~2.5GB입니다.
+| 무엇 | 크기 | 어디 |
+|---|---|---|
+| 코드 · 문서 | 약 7MB | 저장소 |
+| 앱 패키지 | 약 0.5GB | `node_modules` |
+| 실습 튜터 (OpenCode) | 약 0.4GB | `experiments/project-course/node_modules` |
+| 데스크톱 창 (Electron) | 약 0.27GB | `desktop/node_modules` |
+| 빌드한 화면 | 약 30MB | `.next` |
+| (Node가 22·23일 때만) 실습용 Node 24 | 약 0.18GB | `experiments/project-course/.node24` |
+
+합쳐서 **약 1.2GB**, 공부 기록은 `data/`에 따로 쌓입니다. 지울 때는 폴더를 통째로 지우면 됩니다(+ `~/.study-forge`).
 
 ### AI 사용량
 
