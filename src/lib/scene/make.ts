@@ -112,13 +112,19 @@ async function collectedOf(gap: Gap) {
   return [...new Set((await readAttempts()).filter((a) => a.gapId === gap.id && a.verdict === "unclear" && !a.gaveUp && a.answer.trim()).map((a) => a.answer.trim()))].slice(-3);
 }
 
-async function aiScene(gap: Gap, format: Format, mat: Material, ask: Ask, tries: number, mix?: Gap[]): Promise<Scene | null> {
+/** 장면을 만드는 동안 지금 무엇을 하는지(화면의 "…" 옆 글). 기다림이 길어도 납득할 수 있게(사용자 11/15) */
+export type Stage = (text: string) => void;
+const noStage: Stage = () => {};
+
+async function aiScene(gap: Gap, format: Format, mat: Material, ask: Ask, tries: number, mix?: Gap[], stage: Stage = noStage): Promise<Scene | null> {
   let problems: string[] = [];
   const collected = await collectedOf(gap).catch(() => []);
   for (let attempt = 1; attempt <= tries; attempt++) {
     const user = sceneUser(gap, format, mat, { collected, ...(mix ? { mix } : {}) }) + (problems.length ? `\n\n[앞 장면 검사에서 걸린 것 — 고쳐서 다시]\n- ${problems.join("\n- ")}` : "");
+    stage(attempt === 1 ? `AI가 「${FORMAT_LABEL[format]}」 장면을 쓰는 중` : `검사에서 걸린 곳을 고쳐 다시 쓰는 중 (${attempt}번째)`);
     const reply = await ask<SceneReply>("scene:make", SCENE_SYSTEM, user, SCENE_SCHEMA).catch(() => null);
     if (!reply) continue;
+    stage("장면 검사: 모범 답 · 그때 생각을 코드로 돌려 보는 중");
     const scene = await checkScene(fromReply(gap, format, reply, mat.lang, mix));
     if (scene.check?.ok) return scene;
     problems = scene.check?.problems ?? ["검사 실패"];
@@ -151,11 +157,13 @@ async function materialOf(gap: Gap, rec?: Record_): Promise<{ mat: Material; rec
 }
 
 /** 빈틈의 지금 거리에 맞는 장면 하나. 섞기(mix)가 주어지면 그 빈틈들을 한 장면에(응용). */
-export async function makeScene(gap: Gap, opts: { ask?: Ask; rec?: Record_; mix?: Gap[]; /** 시험 · 가상 학습자용: 형식 순서를 정해 줌 */ formats?: Format[] } = {}): Promise<Scene | null> {
+export async function makeScene(gap: Gap, opts: { ask?: Ask; rec?: Record_; mix?: Gap[]; /** 시험 · 가상 학습자용: 형식 순서를 정해 줌 */ formats?: Format[]; stage?: Stage } = {}): Promise<Scene | null> {
   const ask = opts.ask ?? defaultAsk;
+  const stage = opts.stage ?? noStage;
+  stage("그때 기록을 읽는 중");
   const { mat, rec } = await materialOf(gap, opts.rec);
   const keep = async (s: Scene | null) => { if (s?.check?.ok) { await saveScene(s); return s; } return null; };
-  if (opts.mix && opts.mix.length > 1) return keep(await aiScene(gap, "function", mat, ask, 2, opts.mix));
+  if (opts.mix && opts.mix.length > 1) return keep(await aiScene(gap, "function", mat, ask, 2, opts.mix, stage));
   const hasWrong = rec ? Boolean(wrongSubOf(gap, rec)) : gap.state.distance === "same";
   // 실습: 같은 주제의 다른 실습 빈틈(작은 재현 프로젝트 준비 규칙) · 이 빈틈에서 프로젝트를 이미 냈나(한 번만)
   const pctx = gap.branch === "practice" ? {
@@ -165,16 +173,18 @@ export async function makeScene(gap: Gap, opts: { ask?: Ask; rec?: Record_; mix?
   const chain = opts.formats ?? (pctx ? practiceFormats(gap, pctx) : formatsFor(gap, { hasWrongSubmission: hasWrong, lang: gap.origin.lang }));
   for (const [i, f] of chain.entries()) {
     let s: Scene | null = null;
-    if (gap.state.distance === "same" && rec && i === 0 && hasWrong && (f === "fix" || f === "blank")) s = f === "fix" ? await sameScene(gap, rec) : await sameLineScene(gap, rec);
+    if (i > 0) stage(`앞 형식이 안 맞아서 「${FORMAT_LABEL[f]}」로 바꿔 보는 중`);
+    if (gap.state.distance === "same" && rec && i === 0 && hasWrong && (f === "fix" || f === "blank")) { stage("그때 낸 코드에서 그 자리를 자르고, 원래 테스트로 돌려 보는 중"); s = f === "fix" ? await sameScene(gap, rec) : await sameLineScene(gap, rec); }
     // 실습이 맡는 형식(13~17 · 12, 잠금 한 줄 쓰기 은행). 실습의 한 줄 쓰기는 잠금이 아니면 null → 아래 AI 장면으로
-    else if (pctx && (PRACTICE_MADE.includes(f) || f === "write") && (s = await makePracticeScene(gap, f, { ask, ...pctx }).catch(() => null))) { /* 실습이 만듦 */ }
+    else if (pctx && (PRACTICE_MADE.includes(f) || f === "write") && (stage(`실습 「${FORMAT_LABEL[f]}」 장면을 준비하는 중`), s = await makePracticeScene(gap, f, { ask, ...pctx }).catch(() => null))) { /* 실습이 만듦 */ }
     else if (PRACTICE_FORMATS.includes(f) || f === "why") s = null;
-    else if (f === "variant") s = await variantScene(gap, mat, ask).catch(() => null);
-    else s = await aiScene(gap, f, mat, ask, i === 0 ? 2 : 1);
+    else if (f === "variant") { stage("AI가 같은 함정이 있는 새 문제를 쓰는 중(변형 문제, 조금 걸려요)"); s = await variantScene(gap, mat, ask).catch(() => null); }
+    else s = await aiScene(gap, f, mat, ask, i === 0 ? 2 : 1, undefined, stage);
     const kept = await keep(s);
     if (kept) return kept;
   }
   // 물러나기: 은행(같은 생각의 안 푼 장면) → 그때 코드로 고치기
+  stage("만들어 둔 장면 중에서 찾는 중");
   const banked = await bankScene(gap.topic, gap.state.distance, gap.id);
   if (banked) return banked;
   if (rec && hasWrong) return keep(await sameScene(gap, rec));

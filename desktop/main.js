@@ -10,12 +10,22 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const ORIGIN = "http://127.0.0.1:3000";
+// 시험판(11/15 사용자 "일렉트론으로 감쌀 수 있으면 감싸고 … 실습 서버랑 같이 켜지면"): RECALLER_TEST=1이면 지금 쓰는 앱(3000 · 4100)과
+// 겹치지 않게 다른 포트에서 이 폴더의 앱 서버와 실습 서버를 직접 켠다. 코드 · 데이터를 받거나 올리지 않는다(데이터는 복사본).
+const TEST = process.env.RECALLER_TEST === "1";
+const PORT = Number(process.env.RECALLER_PORT || (TEST ? 3100 : 3000));
+const ORIGIN = `http://127.0.0.1:${PORT}`;
 const START_URL = `${ORIGIN}/study`;
 const COURSE_ORIGIN = (process.env.PROJECT_COURSE_URL || "http://127.0.0.1:4100").replace(/\/$/, "");
 const isWin = process.platform === "win32";
-let main = null, splash = null, quitting = false, confirmed = false, course = null;
+let main = null, splash = null, quitting = false, confirmed = false, course = null, appServer = null;
+const killTree = (child) => {
+  if (!child || child.exitCode !== null) return;
+  try { if (isWin) require("node:child_process").execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }); else child.kill(); } catch { /* already gone */ }
+};
 
+// 시험판은 지금 앱과 따로 떠야 하므로 창 크기 · 저장소 · 한 번만 켜기 자물쇠를 따로 쓴다
+if (TEST) app.setPath("userData", path.join(app.getPath("appData"), "Recaller-test"));
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => { const w = main || splash; if (w) { if (w.isMinimized()) w.restore(); w.focus(); } });
 
@@ -53,7 +63,39 @@ function runScript(script, args = []) {
 
 /* ---------- 실습 course server: started with the app, stopped with it ---------- */
 async function up(url) { try { return (await fetch(url, { signal: AbortSignal.timeout(1500) })).status < 500; } catch { return false; } }
+
+/* ---------- 시험판: 이 폴더의 앱 서버(next dev)를 직접 켜고, 준비될 때까지 기다린다 ---------- */
+async function startTestServer() {
+  if (await up(`${ORIGIN}/api/local-experiment/status`)) { splashLine(`앱 서버가 이미 켜져 있어요(${PORT}).\n`); return 0; }
+  splashLine(`① 앱 서버 켜기(${PORT}, 이 폴더 코드 · 데이터 복사본)\n`);
+  appServer = spawn(isWin ? "npx.cmd" : "npx", ["next", "dev", "--hostname", "127.0.0.1", "-p", String(PORT)], { cwd: root, shell: isWin, windowsHide: true,
+    env: { ...process.env, FORCE_COLOR: "0", STUDY_FORGE_LOCAL_EXPERIMENT: "1", STUDY_FORGE_LOCAL_EXPERIMENT_BIND: "127.0.0.1" } });
+  appServer.stdout.on("data", (d) => splashLine(d.toString()));
+  appServer.stderr.on("data", (d) => splashLine(d.toString()));
+  appServer.on("error", (e) => splashLine(`${e.message}\n`));
+  for (let i = 0; i < 180; i++) {
+    if (appServer.exitCode !== null) return 1;
+    if (await up(`${ORIGIN}/api/local-experiment/status`)) { splashLine("   준비됐어요. 첫 화면은 처음 한 번 만드느라 조금 걸려요.\n"); return 0; }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return 1;
+}
+async function startTestCourse() {
+  if (await up(`${COURSE_ORIGIN}/api/status`)) return;
+  const dir = path.join(root, "experiments", "project-course");
+  splashLine(`② 실습 서버 켜기(${COURSE_ORIGIN})\n`);
+  // 지킴이(keeper.mjs)는 4100~4102를 비우므로(지금 앱의 실습 서버가 꺼짐) 시험판은 서버만 직접 켠다
+  const node24 = path.join(dir, ".node24", "node_modules", ".bin", isWin ? "node.cmd" : "node");
+  const useOc = fs.existsSync(node24) && fs.existsSync(path.join(dir, "node_modules", "@opencode", "sdk", "package.json"));
+  const port = new URL(COURSE_ORIGIN).port;
+  course = spawn(useOc ? `"${node24}"` : "node", ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "server/main.ts"],
+    { cwd: dir, shell: isWin, windowsHide: true, stdio: "ignore", env: { ...process.env, PC_NO_OPEN: "1", PC_OPEN: "", PC_PORT: port } });
+  course.on("error", () => { course = null; });
+  splashLine(`   뒤에서 켜요(${useOc ? "튜터 포함" : "튜터 없이: OpenCode가 없어요"}).\n`);
+}
+
 async function startCourse() {
+  if (TEST) return startTestCourse();
   if (process.env.PROJECT_COURSE_AUTOSTART === "0" || await up(`${COURSE_ORIGIN}/api/status`)) return;
   const dir = path.join(root, "experiments", "project-course");
   if (!fs.existsSync(path.join(dir, "tools", "keeper.mjs"))) return;
@@ -64,8 +106,7 @@ async function startCourse() {
   splashLine("   뒤에서 켜요(실습 탭을 열 때 확인해요).\n");
 }
 function stopCourse() {
-  if (!course || course.exitCode !== null) return;
-  try { if (isWin) require("node:child_process").execFileSync("taskkill", ["/PID", String(course.pid), "/T", "/F"], { stdio: "ignore" }); else course.kill(); } catch { /* already gone */ }
+  killTree(course);
   course = null;
 }
 
@@ -107,7 +148,7 @@ function stopPrintService() {
 async function askQuit(win) {
   if (confirmed) return true;
   const { response } = await dialog.showMessageBox(win, { type: "question", buttons: ["끝내기", "취소"], defaultId: 0, cancelId: 1, noLink: true,
-    title: "Recaller", message: "Recaller를 끝낼까요?", detail: "공부 기록을 저장하고, 서버를 끄고, 이 컴퓨터의 데이터를 올려요." });
+    title: "Recaller", message: TEST ? "Recaller 시험판을 끝낼까요?" : "Recaller를 끝낼까요?", detail: TEST ? "시험판 서버(앱 · 실습)를 꺼요. 데이터는 복사본이라 올리지 않아요." : "공부 기록을 저장하고, 서버를 끄고, 이 컴퓨터의 데이터를 올려요." });
   confirmed = response === 0;
   return confirmed;
 }
@@ -124,7 +165,7 @@ const barColors = () => nativeTheme.shouldUseDarkColors ? { color: "#0F1115", sy
 
 function openMain() {
   const b = savedBounds() || { width: 1280, height: 860 };
-  main = new BrowserWindow({ ...b, minWidth: 420, minHeight: 500, title: "Recaller", show: false, autoHideMenuBar: true, backgroundColor: barColors().color,
+  main = new BrowserWindow({ ...b, minWidth: 420, minHeight: 500, title: TEST ? "Recaller (시험판)" : "Recaller", show: false, autoHideMenuBar: true, backgroundColor: barColors().color,
     titleBarStyle: "hidden", titleBarOverlay: { ...barColors(), height: BAR_HEIGHT },
     webPreferences: { contextIsolation: true, sandbox: true } });
   if (b.maximized) main.maximize();
@@ -155,7 +196,7 @@ const menu = Menu.buildFromTemplate([
     { label: "처음 화면", click: () => main && main.loadURL(START_URL) },
     { type: "separator" },
     { label: "브라우저로 열기", click: () => shell.openExternal(main ? main.webContents.getURL() : START_URL) },
-    { label: "데이터 폴더 열기", click: () => shell.openPath(path.resolve(root, "..", "RecallerData")) },
+    { label: "데이터 폴더 열기", click: () => shell.openPath(process.env.STUDY_FORGE_DATA_DIR ? path.resolve(process.env.STUDY_FORGE_DATA_DIR) : path.resolve(root, "..", "RecallerData")) },
     { type: "separator" },
     { label: "끝내기", accelerator: "CmdOrCtrl+Q", click: () => { if (main) main.close(); else app.quit(); } },
   ] },
@@ -168,8 +209,8 @@ const menu = Menu.buildFromTemplate([
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(menu);
-  openSplash("켜는 중이에요 · 코드와 데이터를 받고 서버를 켜요");
-  const code = await runScript("recaller-start.mjs", ["--no-open"]);
+  openSplash(TEST ? "시험판을 켜는 중이에요 · 앱 서버와 실습 서버를 켜요" : "켜는 중이에요 · 코드와 데이터를 받고 서버를 켜요");
+  const code = TEST ? await startTestServer() : await runScript("recaller-start.mjs", ["--no-open"]);
   if (code !== 0) {
     splashTitle("켜지 못했어요. 아래 기록을 확인해 주세요.");
     return;
@@ -199,9 +240,10 @@ app.on("before-quit", (event) => {
 function shutDown() {
   if (main && !main.isDestroyed()) { saveBounds(main); main.destroy(); }
   stopPrintService();
-  openSplash("끝내는 중이에요 · 서버를 끄고 데이터를 올려요");
+  openSplash(TEST ? "시험판을 끝내는 중이에요" : "끝내는 중이에요 · 서버를 끄고 데이터를 올려요");
   splashLine("① 실습 코스 서버 끄기\n");
   stopCourse();
+  if (TEST) { splashLine("② 앱 서버 끄기\n"); killTree(appServer); appServer = null; setTimeout(() => app.exit(0), 600); return; }
   runScript("recaller-stop.mjs").then(async (stopped) => {
     if (stopped !== 0) {
       splashTitle("데이터를 올리지 못했어요. 다음에 켤 때 다시 시도해요.");
@@ -212,5 +254,5 @@ function shutDown() {
 }
 app.on("window-all-closed", () => { if (!quitting) app.quit(); });
 // The loading window closed before the app opened (it failed): nothing to save, just stop what was started.
-app.on("will-quit", () => stopCourse());
+app.on("will-quit", () => { stopCourse(); if (TEST) killTree(appServer); });
 process.on("uncaughtException", (error) => { dialog.showErrorBox("Recaller", String(error && error.stack || error)); });

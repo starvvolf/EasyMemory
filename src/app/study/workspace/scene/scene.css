@@ -60,3 +60,25 @@ pre.bad, .sc-err { color: var(--bad); }
 .sc-todays { display: flex; flex-direction: column; gap: 6px; }
 .sc-order code { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
 .sc-order li > button { flex: 0 0 auto; }
+
+/* 11/15 저녁(사용자): 거리 고르기 · 만드는 중 점 · 통과 알림 */
+.sc-pick { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.sc-pickbtn { position: relative; border: 1px solid var(--line, #dfe2e8); background: var(--card, #fff); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; color: inherit; }
+.sc-pickbtn:hover { border-color: var(--accent, #4b6bfb); }
+.sc-pickbtn.ok { color: var(--ok, #1f8a4c); }
+.sc-pickbtn.rec { border-color: var(--accent, #4b6bfb); background: color-mix(in srgb, var(--accent, #4b6bfb) 10%, transparent); font-weight: 600; }
+.sc-rec { margin-left: 4px; font-size: 10px; padding: 0 5px; border-radius: 6px; background: var(--accent, #4b6bfb); color: #fff; vertical-align: 1px; }
+.sc-dots { display: inline-flex; gap: 3px; margin-right: 6px; vertical-align: middle; }
+.sc-dots i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .25; animation: sc-dot 1.2s infinite ease-in-out; }
+.sc-dots i:nth-child(2) { animation-delay: .2s; } .sc-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes sc-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.sc-toast { position: relative; overflow: hidden; display: flex; gap: 12px; align-items: center; padding: 14px 16px; margin-top: 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--ok, #1f8a4c) 12%, var(--card, #fff)); border: 1px solid color-mix(in srgb, var(--ok, #1f8a4c) 40%, transparent); cursor: pointer;
+  animation: sc-pop .35s cubic-bezier(.2, 1.4, .4, 1); }
+.sc-toast.end { cursor: default; }
+.sc-toast p { margin: 2px 0 0; }
+.sc-toast-check { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ok, #1f8a4c); color: #fff; font-weight: 700; font-size: 18px; animation: sc-pop .45s .05s both cubic-bezier(.2, 1.6, .4, 1); }
+.sc-toast-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--ok, #1f8a4c); animation: sc-bar 1.7s linear forwards; }
+@keyframes sc-pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes sc-bar { from { width: 100%; } to { width: 0; } }
+@media (prefers-reduced-motion: reduce) { .sc-toast, .sc-toast-check, .sc-dots i { animation: none; } .sc-toast-bar { display: none; } }

@@ -36,6 +36,31 @@ function Ladder({ g }: { g: Pick<GapLite, "distance" | "known"> }) {
   return <span className="sc-ladder" aria-label={`지금 ${DIST[g.distance]}`}>{LADDER.map((d, i) => <span key={d} className={g.known || i < at ? "ok" : i === at ? "now" : ""}>{DIST[d]} {g.known || i < at ? "✓" : i === at ? "●" : "─"}</span>)}</span>;
 }
 
+/** 거리 고르기(사용자 11/15): 추천(지금 사다리 자리)은 표시만 하고, 다른 거리를 먼저 눌러도 된다. 통과한 거리 = ✓ */
+function DistancePick({ g, onPick }: { g: Pick<GapLite, "distance" | "known">; onPick: (d: GapLite["distance"]) => void }) {
+  const at = LADDER.indexOf(g.distance);
+  return <span className="sc-pick" role="group" aria-label="거리 고르기">{LADDER.map((d, i) => {
+    const rec = !g.known && i === at;
+    return <button key={d} className={`sc-pickbtn${rec ? " rec" : ""}${g.known || i < at ? " ok" : ""}`} title={rec ? "추천: 지금 이 거리를 확인할 차례예요" : `${DIST[d]}로 확인하기`} onClick={() => onPick(d)}>
+      {DIST[d]}{g.known || i < at ? " ✓" : ""}{rec ? <span className="sc-rec">추천</span> : null}</button>;
+  })}</span>;
+}
+
+/** 장면을 만드는 동안: 지금 무엇을 하는지(서버가 알려 줌) + 움직이는 점 + 걸린 시간 */
+function Making({ gapId }: { gapId: string }) {
+  const [p, setP] = useState<{ text: string; seconds: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const tick = () => call<{ progress: { text: string; seconds: number } | null }>(`/api/scene/progress?gap=${gapId}`).then((r) => { if (alive) setP(r.progress); }).catch(() => {});
+    void tick(); const t = setInterval(tick, 1000);
+    return () => { alive = false; clearInterval(t); };
+  }, [gapId]);
+  return <div className="sc-card sc-making">
+    <p><span className="sc-dots" aria-hidden="true"><i /><i /><i /></span> {p?.text ?? "장면을 준비하는 중"}</p>
+    <p className="small muted">{p ? `${p.seconds}초째` : ""}{p && p.seconds > 20 ? " · AI가 장면을 쓰고, 코드가 정답 · 오답을 직접 돌려서 확인하느라 걸려요. 검사를 통과한 장면만 보여요." : ""}</p>
+  </div>;
+}
+
 function CodeBox({ value, onChange, rows = 6, readOnly, mark }: { value: string; onChange?: (v: string) => void; rows?: number; readOnly?: boolean; mark?: [number, number] | null }) {
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== "Tab" || !onChange) return;
@@ -124,6 +149,13 @@ function SceneCard({ gap, scene, onDone }: { gap: GapLite; scene: SceneLite; onD
   const [invalid, setInvalid] = useState("");
   const [err, setErr] = useState("");
   const [then, setThen] = useState(false);
+  // 통과하면 잠깐 알림을 띄우고 저절로 다음으로(사용자 11/15 "제출하면 그냥 넘어가든지 … 잠깐 떴다가 사라지는 애니메이션"). 알림을 누르면 머문다.
+  const [stay, setStay] = useState(false);
+  useEffect(() => {
+    if (!res || res.verdict !== "pass" || stay) return;
+    const t = setTimeout(() => onDone(res), 1700);
+    return () => clearTimeout(t);
+  }, [res, stay, onDone]);
   const f = scene.format;
   const orderCode = order.map((x) => `${" ".repeat(x.d * 4)}${scene.pieces?.[x.i] ?? ""}`).join("\n");
   const answerText = f === "blank" ? fills.join("\n") : f === "predict" || f === "counter" || f === "draw" ? text : f === "choice" || f === "error" ? String(pick ?? "")
@@ -215,7 +247,11 @@ function SceneCard({ gap, scene, onDone }: { gap: GapLite; scene: SceneLite; onD
     </footer> : null}
     {hinted && !res ? <p className="sc-hint">💡 {gap.missed}</p> : null}
 
-    {res ? <section className={`sc-res v-${res.verdict}`}>
+    {res && res.verdict === "pass" && !stay ? <div className="sc-toast" role="status" onClick={() => setStay(true)} title="눌러서 머물기">
+      <span className="sc-toast-check">✓</span><div><b>{hinted ? "통과! (힌트를 봤으니 한 번 더 볼게요)" : "통과!"}</b>
+        <p className="small">{res.gap.known ? "이제 앎이에요" : `다음엔 ${DIST[res.gap.distance]}`}{res.origin ? ` · ${res.origin}` : ""}</p>
+        <p className="small muted">눌러서 머물기</p></div><span className="sc-toast-bar" /></div> : null}
+    {res && (res.verdict !== "pass" || stay) ? <section className={`sc-res v-${res.verdict}`}>
       <p className="sc-verdict">{res.gaveUp ? "괜찮아요. 이번엔 떠올리지 못한 것으로 남겨요." : res.verdict === "pass" ? (hinted ? "통과! 힌트를 봤으니 한 번 더 볼게요." : "통과!") : res.verdict === "same" ? "그때와 같은 실수예요." : res.verdict === "other" ? "이번엔 다른 데서 틀렸어요." : "틀렸어요. 왜인지는 아직 몰라요."}</p>
       {res.note ? <p className="small">{res.note}</p> : null}
       {res.other ? <p className="small">이번 답은 이런 생각과 같아요: {res.other}</p> : null}
@@ -240,32 +276,39 @@ function SceneCard({ gap, scene, onDone }: { gap: GapLite; scene: SceneLite; onD
 }
 
 /** 빈틈 여러 개를 장면 하나씩. 장면은 필요할 때 만든다(똑같이는 AI 없이, 비슷하게 · 응용은 AI 1번 또는 은행). 섞은 장면이면 섞인 빈틈은 건너뛴다. */
-export function SceneSession({ gapIds, onClose }: { gapIds: string[]; onClose: (done: number) => void }) {
+export function SceneSession({ gapIds, pick, onClose }: { gapIds: string[]; pick?: GapLite["distance"]; onClose: (done: number) => void }) {
   const [at, setAt] = useState(0);
   const [skip, setSkip] = useState<string[]>([]);
-  const [cur, setCur] = useState<{ gap: GapLite; scene: SceneLite } | null>(null);
+  const [cur, setCur] = useState<{ gap: GapLite; scene: SceneLite; recommended?: GapLite["distance"] } | null>(null);
   const [err, setErr] = useState("");
   const [tally, setTally] = useState<Record<string, number>>({});
   const id = gapIds[at];
+  // 나머지 빈틈의 장면은 뒤에서 미리 만들어 둔다(푸는 동안 다음 장면이 준비되게)
+  useEffect(() => { if (!pick && gapIds.length > 1) void call("/api/scene/prefetch", { gapIds: gapIds.slice(1) }).catch(() => {}); }, [gapIds, pick]);
   useEffect(() => {
     if (!id) return;
     if (skip.includes(id)) { const t = setTimeout(() => setAt((k) => k + 1), 0); return () => clearTimeout(t); }
     let alive = true;
-    call<{ gap: GapLite; scene: SceneLite }>("/api/scene/next", { gapId: id }).then((r) => { if (alive) { setCur(r); setErr(""); } })
+    call<{ gap: GapLite; scene: SceneLite; recommended?: GapLite["distance"] }>("/api/scene/next", { gapId: id, ...(pick ? { distance: pick } : {}) }).then((r) => { if (alive) { setCur(r); setErr(""); } })
       .catch((e) => { if (alive) setErr(errorText(e)); });
     return () => { alive = false; };
-  }, [id, skip]);
-  if (!id) return <section className="sc-session done"><p className="sc-verdict">오늘 확인 끝!</p>
-    <p className="small muted">{Object.entries(tally).map(([k, n]) => `${({ pass: "통과", same: "같은 실수", other: "다른 실수", unclear: "미확정" } as Record<string, string>)[k]} ${n}`).join(" · ") || "확인한 것이 없어요."}</p>
-    <button className="btn small" onClick={() => onClose(at)}>닫기</button></section>;
+  }, [id, skip, pick]);
+  // 다 끝나면 잠깐 알림을 띄우고 저절로 목록으로
+  useEffect(() => { if (id) return; const t = setTimeout(() => onClose(at), 1800); return () => clearTimeout(t); }, [id, at, onClose]);
+  const onDone = useCallback((r: Result) => {
+    setTally((t) => ({ ...t, [r.verdict]: (t[r.verdict] ?? 0) + 1 }));
+    setCur((c) => { if (c?.scene.mix?.length) setSkip((s) => [...s, ...c.scene.mix!.filter((g) => g !== c.gap.id)]); return null; });
+    setAt((k) => k + 1);
+  }, []);
+  if (!id) return <section className="sc-session done"><div className="sc-toast end" role="status"><span className="sc-toast-check">✓</span><div><b>확인 끝!</b>
+    <p className="small">{Object.entries(tally).map(([k, n]) => `${({ pass: "통과", same: "같은 실수", other: "다른 실수", unclear: "미확정" } as Record<string, string>)[k]} ${n}`).join(" · ") || "확인한 것이 없어요."}</p></div><span className="sc-toast-bar" /></div></section>;
   return <section className="sc-session">
-    <div className="sc-top"><span className="small muted">확인 {at + 1} / {gapIds.length}</span><span className="cs-gap" /><button className="btn ghost small" onClick={() => onClose(at)}>그만</button></div>
+    <div className="sc-top"><span className="small muted">확인 {at + 1} / {gapIds.length}{pick ? ` · ${DIST[pick]}로 골라서` : ""}</span><span className="cs-gap" /><button className="btn ghost small" onClick={() => onClose(at)}>그만</button></div>
     {err ? <div className="sc-card"><p className="small bad">{err}</p><button className="btn small" onClick={() => { setCur(null); setAt((k) => k + 1); }}>건너뛰기</button></div>
-      : cur && cur.gap.id === id ? <SceneCard key={cur.scene.id} gap={cur.gap} scene={cur.scene} onDone={(r) => {
-        setTally((t) => ({ ...t, [r.verdict]: (t[r.verdict] ?? 0) + 1 }));
-        if (cur.scene.mix?.length) setSkip((s) => [...s, ...cur.scene.mix!.filter((g) => g !== id)]);
-        setCur(null); setAt((k) => k + 1); }} />
-      : <div className="sc-card sc-making"><span className="lc2-caret" /> 장면을 준비하는 중이에요…</div>}
+      : cur && cur.gap.id === id ? <>
+        {cur.recommended && cur.recommended !== cur.scene.distance ? <p className="small muted">추천은 {DIST[cur.recommended]}인데 {DIST[cur.scene.distance]}로 골랐어요. 결과는 이 거리에서 한 칸 움직여요.</p> : null}
+        <SceneCard key={cur.scene.id} gap={cur.gap} scene={cur.scene} onDone={onDone} /></>
+      : <Making gapId={id} />}
   </section>;
 }
 
@@ -274,7 +317,7 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
   const [gaps, setGaps] = useState<GapLite[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [session, setSession] = useState<string[] | null>(null);
+  const [session, setSession] = useState<{ ids: string[]; pick?: GapLite["distance"] } | null>(null);
   const url = runId ? `/api/scene/gaps?run=${encodeURIComponent(runId)}` : `/api/scene/gaps?problem=${encodeURIComponent(problemId ?? "")}`;
   const load = useCallback(() => call<{ gaps: GapLite[] }>(url).then((r) => setGaps(r.gaps)).catch((e) => setErr(errorText(e))), [url]);
   const find = useCallback(async (force = false) => {
@@ -285,23 +328,24 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
   useEffect(() => { let alive = true; void call<{ gaps: GapLite[] }>(url).then((r) => {
     if (!alive) return; setGaps(r.gaps); if (!r.gaps.length && auto && problemId) void find(); }).catch((e) => alive && setErr(errorText(e))); return () => { alive = false; }; }, [url, auto, find, problemId]);
   const markGap = async (g: GapLite, kind: "known" | "undo") => { try { const r = await call<{ gap: GapLite }>("/api/scene/mark", { gapId: g.id, kind }); setGaps((xs) => xs?.map((x) => (x.id === g.id ? r.gap : x)) ?? null); } catch (e) { setErr(errorText(e)); } };
-  if (session) return <SceneSession gapIds={session} onClose={() => { setSession(null); void load(); }} />;
+  if (session) return <SceneSession gapIds={session.ids} pick={session.pick} onClose={() => { setSession(null); void load(); }} />;
   const open = gaps?.filter((g) => !g.known && !g.dismissed) ?? [];
   return <section className="sc-gaps">
     <header className="sc-gapshead"><span className="rv-eyebrow">상황 재현</span><h3 className="rv-title">{runId ? "이 실습에서 놓친 생각" : "이 풀이에서 놓친 생각"}</h3><span className="cs-gap" />
-      {open.length ? <button className="btn small primary" onClick={() => setSession(open.sort((a, b) => a.layer - b.layer || a.dose - b.dose).map((g) => g.id))}>모두 확인하기</button> : null}</header>
+      {open.length ? <button className="btn small primary" onClick={() => setSession({ ids: open.sort((a, b) => a.layer - b.layer || a.dose - b.dose).map((g) => g.id) })}>모두 확인하기(추천대로)</button> : null}</header>
     {busy ? <p className="small muted"><span className="lc2-caret" /> 풀이 기록에서 놓친 생각을 찾는 중이에요… (AI 1번)</p> : null}
     {err ? <p className="small bad">{err}</p> : null}
     {gaps && !gaps.length && !busy ? <div className="row small"><span className="muted">{runId ? "아직 없어요. 목표를 마치면 실습 정리에서 생겨요." : "아직 찾지 않았어요."}</span>{problemId ? <button className="btn small" onClick={() => void find()}>놓친 생각 찾기</button> : null}</div> : null}
     {gaps?.length ? <ol className="sc-gaplist">{gaps.map((g) => <li key={g.id} className={g.known || g.dismissed ? "known" : ""}>
-      <div className="sc-gapline"><span className="sc-chip">{g.kind}</span><b>{g.title}</b><span className="cs-gap" /><Ladder g={g} /></div>
+      <div className="sc-gapline"><span className="sc-chip">{g.kind}</span><b>{g.title}</b><span className="cs-gap" />
+        {g.dismissed ? <Ladder g={g} /> : <DistancePick g={g} onPick={(d) => setSession({ ids: [g.id], ...(d !== g.distance || g.known ? { pick: d } : {}) })} />}</div>
       <p className="small">{g.missed}{g.wrong ? <span className="muted"> · 그때: {g.wrong}</span> : null}</p>
       <div className="row small"><span className="muted">{SCOPE[g.scope]} · 세기 {g.dose}{g.target === "form" ? " · 표현" : ""}{g.doubtful ? " · 다시 볼 빈틈" : ""}{g.dismissed ? " · 아는 거라고 뺌" : ""}</span><span className="cs-gap" />
         {g.dismissed ? <button className="linkish small" onClick={() => void markGap(g, "undo")}>되돌리기</button>
-          : !g.known ? <><button className="linkish small" title="뽑기가 틀렸어요: 이건 원래 알던 거예요. 복습에서 뺄게요." onClick={() => void markGap(g, "known")}>이건 아는 거였어요</button>
-            <button className="btn small" onClick={() => setSession([g.id])}>확인하기</button></> : null}</div>
+          : !g.known ? <button className="linkish small" title="뽑기가 틀렸어요: 이건 원래 알던 거예요. 복습에서 뺄게요." onClick={() => void markGap(g, "known")}>이건 아는 거였어요</button>
+          : <span className="small muted">앎 — 거리를 눌러 다시 확인할 수 있어요</span>}</div>
     </li>)}</ol> : null}
-    {gaps?.length ? <p className="small muted">맞으면 한 칸 멀리(똑같이 → 비슷하게 → 응용), 틀리면 한 칸 가까이. 응용까지 통과하면 &lsquo;앎&rsquo;이에요. {problemId ? <button className="linkish small" disabled={busy} onClick={() => void find(true)}>다시 찾기</button> : null}</p> : null}
+    {gaps?.length ? <p className="small muted">거리를 누르면 바로 확인해요(추천 = 지금 차례, 다른 거리를 먼저 골라도 돼요). 맞으면 한 칸 멀리(똑같이 → 비슷하게 → 응용), 틀리면 한 칸 가까이. 응용까지 통과하면 &lsquo;앎&rsquo;이에요. {problemId ? <button className="linkish small" disabled={busy} onClick={() => void find(true)}>다시 찾기</button> : null}</p> : null}
   </section>;
 }
 

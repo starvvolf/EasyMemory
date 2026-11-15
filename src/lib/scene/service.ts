@@ -85,6 +85,7 @@ async function rememberEvent(gap: Gap, verdict: SceneVerdict, o: { hinted?: bool
 export async function extract(problemId: string, opts: { ask?: Ask; force?: boolean } = {}) {
   const gaps = await extractGaps(problemId, opts);
   await remember(gaps);
+  prefetch(gaps.filter((g) => !g.state.known).map((g) => g.id), opts.ask ? { ask: opts.ask } : {});
   return (await readGaps()).filter((g) => g.origin.problemId === problemId).map(gapView);
 }
 
@@ -93,27 +94,84 @@ export async function extract(problemId: string, opts: { ask?: Ask; force?: bool
  * 응용 섞기(설계 4번): 한 줄 범위 빈틈이 응용 차례이고, 같은 때 응용 차례인 다른 한 줄 빈틈이 있으면 작은 함수 하나에 섞어서(최대 셋).
  */
 const pending = new Map<string, string>();
-export async function next(gapId: string, opts: { ask?: Ask; mix?: boolean } = {}) {
+/** 만드는 중인 장면(같은 빈틈 · 거리를 두 번 만들지 않게) · 지금 무엇을 하는지(화면의 "…" 옆 글) */
+const inflight = new Map<string, Promise<Scene | null>>();
+const stages = new Map<string, { text: string; at: number; started: number }>();
+const key = (gapId: string, distance: string) => `${gapId}@${distance}`;
+export function progress(gapId: string) {
+  const hit = [...stages.entries()].filter(([k]) => k.startsWith(`${gapId}@`)).map(([, v]) => v).sort((a, b) => b.at - a.at)[0];
+  return hit ? { text: hit.text, seconds: Math.round((Date.now() - hit.started) / 1000) } : null;
+}
+
+/** 장면 하나 만들기(같은 빈틈 · 거리는 한 번만 동시에). 응용 섞기는 고른 거리 없이(추천대로) 들어온 응용일 때만. */
+function build(gap: Gap, all: Gap[], opts: { ask?: Ask; mix?: boolean }) {
+  const k = key(gap.id, gap.state.distance);
+  const had = inflight.get(k);
+  if (had) return had;
+  const started = Date.now();
+  const stage = (text: string) => stages.set(k, { text, at: Date.now(), started });
+  const run = (async () => {
+    let scene: Scene | null = null;
+    if (opts.mix !== false && gap.scope === "line" && gap.state.distance === "far" && gap.branch === "algo") {
+      const due = Date.now();
+      // 알고리즘 고르기의 응용은 변형 문제라 섞지 않는다
+      const mixable = (g: Gap) => g.scope === "line" && g.kind !== "알고리즘 고르기";
+      const others = !mixable(gap) ? [] : all.filter((g) => g.id !== gap.id && g.branch === "algo" && mixable(g) && g.state.distance === "far" && !g.state.known && !g.dismissed
+        && Date.parse(g.state.due) <= due + 86_400_000 && g.origin.lang === gap.origin.lang).slice(0, 2);
+      if (others.length) { stage(`응용: 한 줄 빈틈 ${others.length + 1}개를 작은 함수 하나에 섞는 중`); scene = await makeScene(gap, { ...(opts.ask ? { ask: opts.ask } : {}), mix: [gap, ...others], stage }).catch(() => null); }
+    }
+    return scene ?? await makeScene(gap, { ...(opts.ask ? { ask: opts.ask } : {}), stage });
+  })().finally(() => { inflight.delete(k); stages.delete(k); });
+  inflight.set(k, run);
+  return run;
+}
+
+/**
+ * 빈틈의 다음 장면: 지금 거리(추천)의 아직 안 푼 장면이 있으면 그것, 만드는 중이면 그것을 기다리고, 없으면 새로 만든다.
+ * distance를 주면 추천 대신 학습자가 고른 거리로(사용자 11/15 "AI 판단은 지금처럼 하되 다른 거 먼저 누르고 싶으면").
+ */
+export async function next(gapId: string, opts: { ask?: Ask; mix?: boolean; distance?: Gap["state"]["distance"] } = {}) {
   await syncPractice();
   const all = await readGaps();
-  const gap = all.find((g) => g.id === gapId);
-  if (!gap) throw new Error("빈틈을 찾을 수 없어요.");
-  const had = pending.get(gapId);
+  const found = all.find((g) => g.id === gapId);
+  if (!found) throw new Error("빈틈을 찾을 수 없어요.");
+  const chosen = opts.distance && opts.distance !== found.state.distance;
+  const gap: Gap = chosen ? { ...found, state: { ...found.state, distance: opts.distance! } } : found;
+  const had = pending.get(key(gapId, gap.state.distance));
   const old = (had ? await readScene(had) : null) ?? await unusedScene(gapId, gap.state.distance);
-  if (old && old.distance === gap.state.distance) { pending.set(gapId, old.id); return { gap: gapView(gap), scene: publicScene(old) }; }
-  let scene: Scene | null = null;
-  if (opts.mix !== false && gap.scope === "line" && gap.state.distance === "far" && gap.branch === "algo") {
-    const due = Date.now();
-    // 알고리즘 고르기의 응용은 변형 문제라 섞지 않는다
-    const mixable = (g: Gap) => g.scope === "line" && g.kind !== "알고리즘 고르기";
-    const others = !mixable(gap) ? [] : all.filter((g) => g.id !== gap.id && g.branch === "algo" && mixable(g) && g.state.distance === "far" && !g.state.known && !g.dismissed
-      && Date.parse(g.state.due) <= due + 86_400_000 && g.origin.lang === gap.origin.lang).slice(0, 2);
-    if (others.length) scene = await makeScene(gap, { ...(opts.ask ? { ask: opts.ask } : {}), mix: [gap, ...others] }).catch(() => null);
-  }
-  scene ??= await makeScene(gap, { ...(opts.ask ? { ask: opts.ask } : {}) });
+  if (old && old.distance === gap.state.distance) { pending.set(key(gapId, gap.state.distance), old.id); return { gap: gapView(found), scene: publicScene(old), recommended: found.state.distance }; }
+  const scene = await build(gap, all, { ...opts, ...(chosen ? { mix: false } : {}) });
   if (!scene) throw new Error("이 빈틈의 장면을 만들지 못했어요. 나중에 다시 해 볼게요.");
-  pending.set(gapId, scene.id);
-  return { gap: gapView(gap), scene: publicScene(scene) };
+  pending.set(key(gapId, gap.state.distance), scene.id);
+  return { gap: gapView(found), scene: publicScene(scene), recommended: found.state.distance };
+}
+
+/**
+ * 미리 만들어 두기(사용자 11/15 "미리 살짝 만들어 놔도 돼?"): 빈틈을 뽑은 뒤 · 확인을 시작할 때, 추천 거리의 장면을 뒤에서 만들어 둔다.
+ * 이미 있거나 만드는 중이면 건너뛴다. 동시에 둘까지(AI 호출이 한꺼번에 몰리지 않게). 결과를 기다리지 않는다.
+ */
+let prefetching = 0;
+const prefetchQueue: string[] = [];
+export function prefetch(gapIds: string[], opts: { ask?: Ask } = {}) {
+  for (const id of gapIds) if (!prefetchQueue.includes(id)) prefetchQueue.push(id);
+  const pump = async () => {
+    while (prefetching < 2 && prefetchQueue.length) {
+      const id = prefetchQueue.shift()!;
+      prefetching++;
+      void (async () => {
+        try {
+          const all = await readGaps();
+          const gap = all.find((g) => g.id === id);
+          if (!gap || gap.state.known || gap.dismissed) return;
+          if (await unusedScene(id, gap.state.distance) || inflight.has(key(id, gap.state.distance))) return;
+          await build(gap, all, opts);
+        } catch (e) { console.warn(`[scene] 미리 만들기 실패: ${(e as Error).message}`); }
+        finally { prefetching--; void pump(); }
+      })();
+    }
+  };
+  void pump();
+  return { queued: prefetchQueue.length + prefetching };
 }
 
 /** 미리 실행: 보이는 입력(기본)에서만 돌려 출력을 보여 준다. 채점은 안 함. 반례 만들기는 학습자가 쓴 입력으로 두 코드를 돌리지 않고(답이 됨) 입력 검사만. */
@@ -150,12 +208,14 @@ export async function answer(sceneId: string, input: { answer: string; hinted?: 
   const changed = await changeGaps((gaps) => targets.map((id) => {
     const i = gaps.findIndex((g) => g.id === id);
     if (i < 0) return null;
-    gaps[i] = reflect(gaps[i], graded.verdict, { hinted: input.hinted, gaveUp: input.gaveUp });
+    // 학습자가 추천과 다른 거리를 골라 풀었으면 그 거리에서 한 칸 움직인다
+    const base = id === s.gapId && gaps[i].state.distance !== s.distance ? { ...gaps[i], state: { ...gaps[i].state, distance: s.distance, here: 0 } } : gaps[i];
+    gaps[i] = reflect(base, graded.verdict, { hinted: input.hinted, gaveUp: input.gaveUp });
     return gaps[i];
   }).filter((g): g is Gap => Boolean(g)));
   const gap = changed.find((g) => g.id === (graded.gapId ?? s.gapId)) ?? changed[0];
   for (const g of changed) await rememberEvent(g, graded.verdict, input);
-  for (const id of targets) pending.delete(id);
+  for (const id of targets) for (const d of ["same", "near", "far"]) pending.delete(key(id, d));
   const other = graded.matched && !/^mine/.test(graded.matched) && graded.matched !== "gave-up" ? s.wrongs.find((w) => w.id === graded.matched)?.what : undefined;
   return {
     verdict: graded.verdict, label: VERDICT_LABEL[graded.verdict], gaveUp: Boolean(input.gaveUp), note: graded.note,

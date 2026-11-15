@@ -10,10 +10,13 @@
 //   GET  /api/scene/tutor?gap=<id>     [튜터와 다시 보기] 열 곳 · 건넬 말
 //   POST /api/scene/why {sceneId, text?}           왜인지 한 줄: text 없으면 질문, 있으면 채점(AI 1번)
 //   POST /api/scene/mark {gapId, kind}             [이건 아는 거였어요](known) · 다시 볼 것(doubt) · 되돌리기(undo)
+//   GET  /api/scene/progress?gap=<id>  장면을 만드는 중이면 지금 무엇을 하는지(화면의 "…" 옆 글)
+//   POST /api/scene/prefetch {gapIds}  추천 거리의 장면을 뒤에서 미리 만들어 둠(기다리지 않음)
+//   POST /api/scene/next {gapId, distance?}        distance를 주면 추천 대신 고른 거리로
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, responseError } from "@/lib/http";
-import { answer, extract, gapsOf, gapsOfRun, mark, next, preview, thenView, today, tutorLink, why, whyQuestion } from "@/lib/scene/service";
+import { answer, extract, gapsOf, gapsOfRun, mark, next, prefetch, preview, progress, thenView, today, tutorLink, why, whyQuestion } from "@/lib/scene/service";
 
 export const runtime = "nodejs";
 type Context = { params: Promise<{ path?: string[] }> };
@@ -30,6 +33,7 @@ export async function GET(request: Request, context: Context) {
     if (p === "gaps") return NextResponse.json({ gaps: await gapsOf(z.string().regex(/^cp_[a-z0-9_-]{3,40}$/).parse(q.get("problem"))) });
     if (p === "then") return NextResponse.json(await thenView(gapId.parse(q.get("gap"))));
     if (p === "tutor") return NextResponse.json(await tutorLink(gapId.parse(q.get("gap"))));
+    if (p === "progress") return NextResponse.json({ progress: progress(gapId.parse(q.get("gap"))) });
     return NextResponse.json({ message: "경로를 찾을 수 없어요." }, { status: 404 });
   } catch (error) { return fail(error); }
 }
@@ -38,7 +42,8 @@ export async function POST(request: Request, context: Context) {
     const [p] = (await context.params).path ?? [];
     const body = await boundedJson(request);
     if (p === "extract") { const b = z.object({ problemId: z.string().regex(/^cp_[a-z0-9_-]{3,40}$/), force: z.boolean().optional() }).parse(body); return NextResponse.json({ gaps: await extract(b.problemId, { force: b.force }) }); }
-    if (p === "next") return NextResponse.json(await next(z.object({ gapId: z.string().regex(/^gap_[a-f0-9]{12}$/) }).parse(body).gapId));
+    if (p === "next") { const b = z.object({ gapId: z.string().regex(/^gap_[a-f0-9]{12}$/), distance: z.enum(["same", "near", "far"]).optional() }).parse(body); return NextResponse.json(await next(b.gapId, b.distance ? { distance: b.distance } : {})); }
+    if (p === "prefetch") return NextResponse.json(prefetch(z.object({ gapIds: z.array(z.string().regex(/^gap_[a-f0-9]{12}$/)).max(40) }).parse(body).gapIds));
     if (p === "run") { const b = z.object({ sceneId, answer: z.string().max(20000) }).parse(body); return NextResponse.json(await preview(b.sceneId, b.answer)); }
     if (p === "why") { const b = z.object({ sceneId, text: z.string().max(2000).optional() }).parse(body); return NextResponse.json(b.text?.trim() ? await why(b.sceneId, b.text) : await whyQuestion(b.sceneId)); }
     if (p === "mark") { const b = z.object({ gapId: z.string().regex(/^gap_[a-f0-9]{12}$/), kind: z.enum(["known", "doubt", "undo"]), note: z.string().max(200).optional() }).parse(body); return NextResponse.json({ gap: await mark(b.gapId, b.kind, b.note) }); }
