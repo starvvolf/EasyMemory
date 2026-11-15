@@ -1,32 +1,102 @@
 # Recaller
 
-이론(PDF·웹 글)은 읽어서, 알고리즘은 풀어서, 실습에서는 만들어 보며 배운 것을 지식 하나로 쌓고, 잊을 때쯤 다시 묻는 PC 학습 앱입니다.
+배운 것을 **기억 하나**로 쌓고, 잊을 때쯤 다시 묻는 PC 학습 앱입니다.
+이론(PDF)은 읽어서, 알고리즘은 풀어서, 실습은 만들어 보며 배운 것을 한곳에 모읍니다.
 
-- 작업 규칙: [CLAUDE.md](CLAUDE.md) · 지금 상태: [협업/현황.md](협업/현황.md) · 정한 것: [docs/DECISIONS.md](docs/DECISIONS.md)
-- 구조도: [협업/구조도/구조도.html](https://starvvolf.github.io/EasyMemory/%ED%98%91%EC%97%85/%EA%B5%AC%EC%A1%B0%EB%8F%84/%EA%B5%AC%EC%A1%B0%EB%8F%84.html)
-- 브랜치 `claude/recaller2`
+> AI는 만들고 돕기만 합니다. **판정 · 기록 · 복습 날짜는 코드가 정합니다.**
 
-## 켜고 끄기
+## 무엇을 하나
 
-`Recaller 앱.cmd` 하나만 씁니다. 처음 한 번 바탕화면에 `Recaller` 바로가기를 만듭니다.
+| 갈래 | 하는 일 |
+|---|---|
+| **PDF → 기억** | 강의 PDF를 넣으면 쪽마다 글 · 그림 비중을 코드로 재서 필요한 것만 AI에 보내고, 주제별로 나눠 동시에 기억 카드를 만듭니다. 52쪽 자료 약 1분 44초. ([분석](docs/결과/PDF_시간토큰비용분석.md)) |
+| **알고리즘 튜터** | 문제를 풀 때 튜터가 한 걸음씩만 돕고, 제출 코드는 이 PC에서 직접 채점합니다(Python · JavaScript · C++ · C#). |
+| **상황 재현 복습** | 풀이 기록에서 "그때 떠올리지 못한 생각"을 뽑아, 그 생각만 다시 꺼내게 하는 작은 장면(17가지 형식)을 냅니다. 정답 · 오답 모양은 AI가 쓰지 않고 **코드를 돌려서** 만들고, 학습자의 답도 실행 결과로 판정합니다. ([설계](docs/상황재현_설계.md)) |
+| **실습 코스** | 게시판 API를 단계별로 만들며, 실제 HTTP 요청으로 검사하고 VS Code에서 고칩니다. |
+| **유튜브 요약** | 강의 영상 자막을 요약 노트로 만들어 기억으로 넘깁니다. |
+| **가상 학습자** | AI가 여러 성향의 학습자를 연기해 앱을 끝까지 써 보는 자체 시험 도구입니다. ([설계](docs/가상학습자_설계.md) · [결과](docs/결과/상황재현_자체시험.md)) |
 
-- **켤 때**(로딩 창): 코드 받기 → 패키지(바뀐 때만) → 데이터 받기(RecallerData) → 앱 서버(127.0.0.1:3000) → 실습 코스 서버(4100) → 창 열기
-- **끌 때**: 창의 X(또는 Ctrl+Q) → "Recaller를 끝낼까요?" → 실습 코스 서버 끄기 → 앱 서버 끄기 → 데이터 올리기
+## 구조
 
-Node.js 24, AI는 ChatGPT 계정 로그인. 키와 개인 학습자료는 이 저장소에 넣지 않습니다(데이터는 비공개 저장소 RecallerData).
+```
+화면(Next.js, src/app/study) ──> API(src/app/api) ──> 기능(src/lib)
+                                                     ├ study/gen   PDF → 기억 엔진
+                                                     ├ code        알고리즘 · 채점기
+                                                     ├ scene       상황 재현(뽑기 · 고르기 · 만들기 · 검사 · 채점 · 반영)
+                                                     ├ knowledge   기억 저장소 · 복습 날짜
+                                                     └ npc         가상 학습자
+데스크톱 창(desktop, Electron) ── 앱 서버(3000) + 실습 서버(experiments/project-course, 4100)
+```
+
+자세한 그림: [docs/구조도](docs/구조도/구조도.html) · 동작 설명: [docs](docs)
+
+기술: Next.js 16 · React 19 · TypeScript · Electron 33 · Node.js 24 · pdf.js · Transformers.js(EmbeddingGemma) · OpenCode SDK
+
+## 켜기 (Windows)
+
+### 필요한 것
+
+| 무엇 | 왜 |
+|---|---|
+| Windows 10/11, [Node.js 24](https://nodejs.org) | 앱 실행 |
+| ChatGPT 계정 | AI 기능 (앱 안에서 로그인) |
+| Python 3 | 알고리즘 채점 · 상황 재현 |
+| VS Code | 실습 |
+| (선택) g++, .NET | C++ · C#으로 풀 때 |
+
+### 처음 켜기
+
+1. 이 저장소를 받습니다(`git clone` 또는 ZIP).
+2. **`Recaller 켜기.cmd`** 를 더블클릭합니다.
+   - 처음 한 번 패키지 · 데스크톱 창 · 실습 튜터를 설치하고 화면을 빌드합니다(인터넷 속도에 따라 수 분).
+   - 그다음부터는 바로 켜집니다.
+3. 창이 뜨면 화면 위 **[ChatGPT 로그인]** 을 누릅니다. 로그인은 평소 쓰는 브라우저에서 열리고, 끝나면 창으로 돌아와 새로 고침(Ctrl+R)합니다.
+
+창을 닫으면 확인한 뒤 서버를 모두 끕니다.
+
+### 데이터
+
+- 공부 기록 · 넣은 PDF · 로그인 정보는 **이 폴더의 `data/`에만** 저장됩니다. 어디로도 올리지 않습니다.
+- 로그인 토큰은 암호화해 두고, 열쇠는 사용자 폴더(`~/.study-forge`)에 따로 둡니다.
+- 처음부터 다시: 앱을 끄고 `data/` 폴더 이름을 바꾸면 빈 상태로 켜집니다.
+
+### 용량
+
+| 무엇 | 크기 |
+|---|---|
+| 저장소 (코드 · 문서) | 약 7MB |
+| 앱 패키지 (`node_modules`) | 약 1.2GB |
+| 데스크톱 창 (Electron) | 약 270MB |
+| 빌드한 화면 (`.next`) | 약 100MB |
+| 실습 튜터 (Node 24 · OpenCode) | 약 0.2~0.3GB |
+| 기억 비교 모델 (처음 쓸 때 받음) | 약 300MB |
+
+합쳐서 약 2~2.5GB입니다.
+
+### AI 사용량
+
+AI 호출은 로그인한 ChatGPT 계정의 사용량을 씁니다. PDF 50쪽 하나로 기억을 만들면 호출 16번쯤입니다.
+
+## 시험
+
+```bash
+npm test                 # 249개 (파이썬을 실제로 돌리는 채점 시험 포함, AI 없음)
+npx tsc --noEmit -p .    # 타입 검사
+```
+
+ChatGPT 없이 앱을 끝까지 돌리는 자체 시험: `tools/harness`(대역 모델 중계) · 가상 학습자: `tools/npc`.
 
 ## 폴더
 
 | 폴더 | 무엇 |
 |---|---|
-| `src/` | 앱(Next.js). 화면 `src/app/study`, API `src/app/api`, 기능 `src/lib` |
-| `desktop/` | Electron 앱(켜고 끄기) |
-| `experiments/project-course/` | 실습 코스 서버(4100)와 VS Code 확장 |
-| `scripts/` | 앱 켜기·끄기·데이터 동기화·데이터 보관 |
-| `tools/` | 개발 도구: 토큰 사용량·작업 현황(3091), 용량 보기(`space.mjs`), 데이터 보관하고 새로 시작, 에이전트 MCP |
-| `협업/`, `docs/` | 협업 문서, 결정·파이프라인 설명 |
+| `src/` | 앱. 화면 `src/app/study`, API `src/app/api`, 기능 `src/lib` |
+| `desktop/` | 데스크톱 창(Electron): 빌드 · 서버 켜고 끄기 |
+| `experiments/project-course/` | 실습 코스 서버와 VS Code 연결 확장 |
+| `tools/` | 자체 시험(harness) · 가상 학습자(npc) |
+| `docs/` | 설계 · 동작 설명 · 측정 결과 · 구조도 |
 
-## 데이터
+## 라이선스 · 출처
 
-- 시연 전 새로 시작: 앱을 끈 뒤 `tools/데이터 보관하고 새로 시작.cmd` (지금 데이터를 RecallerData의 `보관/<날짜-이름>/`으로 옮기고 빈 데이터로 시작, 지우지 않음). 되돌리기: `node scripts/recaller-data.mjs restore <보관본>`.
-- 용량 큰 것 위치: `node tools/space.mjs` (지워도 되는 것·확인 후 지울 것·남길 것, 아무것도 지우지 않음).
+- 글꼴 Pretendard: SIL Open Font License (`experiments/project-course/web/Pretendard-LICENSE.txt`)
+- 알고리즘 문제 목록은 문제 번호 · 제목만 담고, 문제 원문은 담지 않습니다.

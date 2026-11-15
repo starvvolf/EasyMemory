@@ -1,68 +1,26 @@
-# dependencies
+# 패키지 · 빌드
 /node_modules
 /desktop/node_modules
-
-# next.js
 /.next/
 next-env.d.ts
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
-
-# env files
-.env*
-!.env.example
-
-# vercel
-.vercel
-
-# typescript
 *.tsbuildinfo
 
-# Study Forge eval local artifacts
-eval/local/
-eval/**/tmp/
-eval/**/logs/
-eval/**/*.partial.json
-eval/**/*.secret.*
-
-# Personal local Study Forge projects and source PDFs
+# 내 데이터 (공부 기록 · PDF · 로그인) — 이 컴퓨터에만
+/data/
 .study-forge-data/
-
-# Local runtime artifacts
-/next-*.log
-/output/
 /tmp/
-# 작업 현황: 세션이 남기는 "고치는 중" 표시 (tools/work, 2026-11-02 A)
-/.recaller-work/
-/*.traineddata
 
-# Authoring output of local generation runs (/study and /lab): personal run data, like .study-forge-data/
-tools/problem-authoring-lab/runs/chatgpt-request-*/
+# 설정 · 키
+.env*
+!.env.example
+*.pem
 
-# 강의 슬라이드 원문 캡처는 비공개 저장소(recaller-data)에 둔다
-협업/캡처/**/*-source-*.jpg
-
-# Claude Code: 세션이 만드는 작업 폴더 (에이전트·설정은 올린다)
-.claude/worktrees/
-.claude/settings.local.json
-# 루트별 실험 서버 (lab/run-lab.mjs): 빌드 폴더와 서버가 만드는 tsconfig
-/.next-lab-*/
-/tsconfig.lab-*.json
-
-# 가상 학습자(NPC) 결과 · NPC 데이터 폴더 · 중계 폴더 (tools/npc, 문제 원문 · 기록이 들어감)
+# 로그 · 시험 결과
+npm-debug.log*
+/next-*.log
 /tools/npc/out/
+.DS_Store
+
+# 에디터 · 에이전트 작업 폴더
+/.claude/
+/.vscode/

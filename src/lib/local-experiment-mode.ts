@@ -8,7 +8,8 @@ export function isLocalExperimentRequest(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (
-    env.NODE_ENV === "production" ||
+    // 빌드한 앱(next start)은 데스크톱 창이 127.0.0.1로만 켤 때(RECALLER_DESKTOP=1)만 받는다. 그 밖의 배포 서버에서는 늘 막는다.
+    (env.NODE_ENV === "production" && env.RECALLER_DESKTOP !== "1") ||
     env.STUDY_FORGE_LOCAL_EXPERIMENT !== "1" ||
     env.STUDY_FORGE_LOCAL_EXPERIMENT_BIND !== "127.0.0.1"
   ) return false;

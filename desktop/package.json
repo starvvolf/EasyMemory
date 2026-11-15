@@ -2,7 +2,7 @@
   "name": "recaller-desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Recaller desktop window: starts the local server (scripts/recaller-start.mjs) and shows /study in its own window.",
+  "description": "Recaller desktop window: builds and starts the local app server and the practice server, and shows /study in its own window. Data stays in ../data.",
   "main": "main.js",
   "scripts": { "start": "electron ." },
   "devDependencies": { "electron": "33.4.11" }

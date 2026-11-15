@@ -79,11 +79,13 @@ test("consecutive slides with the same title are one section", () => {
   assert.deepEqual(sections.map((s) => s.pages), [[4, 5], [6, 7, 8]]);
 });
 
-test("빠른 전처리 (실험): worker processes read and draw the pages; the result is the same as reading in one process", async () => {
+// 시험 PDF(강의 자료)는 저장소에 넣지 않는다: 있을 때만 돈다(RECALLER_TEST_PDF 또는 eval/corpus/…).
+const TEST_PDF = process.env.RECALLER_TEST_PDF || "eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf";
+test("빠른 전처리 (실험): worker processes read and draw the pages; the result is the same as reading in one process", { skip: !(await import("node:fs")).existsSync(TEST_PDF) && "시험 PDF가 없어요" }, async () => {
   const { readFile } = await import("node:fs/promises");
   const path = await import("node:path");
   const { preparePdf, preparePdfFast } = await import("./prep.ts");
-  const bytes = new Uint8Array(await readFile(path.join(process.cwd(), "eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf")));
+  const bytes = new Uint8Array(await readFile(path.resolve(process.cwd(), TEST_PDF)));
   const slow = await preparePdf(bytes, [1, 2], "prep-2");
   const fast = await preparePdfFast(bytes, [1, 2], "prep-2", { procs: 2, width: 512, workerPath: path.join(process.cwd(), "src/lib/study/gen/prep-worker.ts") });
   assert.deepEqual(fast.prep, slow);

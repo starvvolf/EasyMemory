@@ -68,7 +68,7 @@ export default function DataPanel({ onClose }: { onClose: () => void }) {
                 <button className="btn small" disabled={!!busy} onClick={() => void act("sync", { action: "sync", on: !s.on })}>{s.on ? "동기화 끄기" : "동기화 켜기"}</button>
                 {s.on ? <button className="btn small" disabled={!!busy} onClick={() => void act("push", { action: "push" }, (j) => { setMsg(j.ok ? "올렸어요." : `못 올렸어요: ${String(j.out ?? "").slice(-200)}`); })}>{busy === "push" ? "올리는 중…" : "지금 올리기"}</button> : null}
               </div>
-            </div> : <p className="small muted">이 데이터 폴더는 RecallerData 저장소가 아니라서 다른 컴퓨터와 공유되지 않아요.</p>}
+            </div> : <p className="small muted">데이터는 이 컴퓨터의 이 폴더에만 저장돼요.</p>}
           </section>
           {view.groups.map((g) => (
             <details key={g.key} className="dp-group" open={g.key === "gens"}>

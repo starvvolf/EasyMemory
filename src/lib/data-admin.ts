@@ -154,8 +154,7 @@ export async function setSync(on: boolean) {
   else { await mkdir(path.dirname(syncOff()), { recursive: true }); await writeFile(syncOff(), "11/9 데이터 관리에서 끔\n"); }
 }
 
-/** 지금 올리기: 앱을 끄지 않고 scripts/recaller-sync.mjs push. */
-export async function pushNow() {
-  if (existsSync(syncOff())) throw Object.assign(new Error("이 컴퓨터는 동기화가 꺼져 있어요. 먼저 켜 주세요."), { status: 409 });
-  return run(process.execPath, [path.join(root(), "scripts", "recaller-sync.mjs"), "push"], root(), 120000);
+/** 배포판은 데이터를 이 컴퓨터에만 둔다(올리기 없음). */
+export async function pushNow(): Promise<{ ok: boolean; out: string }> {
+  throw Object.assign(new Error("배포판은 데이터를 이 컴퓨터에만 저장해요(올리기 없음)."), { status: 409 });
 }
