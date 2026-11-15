@@ -39,6 +39,8 @@ const ENV = { ...process.env, FORCE_COLOR: "0", NEXT_TELEMETRY_DISABLED: "1",
   STUDY_FORGE_AUTO_EXECUTOR: process.env.STUDY_FORGE_AUTO_EXECUTOR || "1", STUDY_FORGE_MODEL_PROVIDER: process.env.STUDY_FORGE_MODEL_PROVIDER || "chatgpt",
   STUDY_FORGE_CHATGPT_ENCRYPTION_KEY: tokenKey(),
   PROJECT_COURSE_URL: COURSE_ORIGIN, PROJECT_COURSE_AUTOSTART: "0", PC_DATA_DIR: COURSE_DATA };
+// 다른 포트로 켜면(예: 같은 PC에 다른 Recaller가 있을 때) 창 크기 · 저장소 · 한 번만 켜기 자물쇠를 따로 쓴다
+if (PORT !== 3000) app.setPath("userData", path.join(app.getPath("appData"), `Recaller-${PORT}`));
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => { const w = main || splash; if (w) { if (w.isMinimized()) w.restore(); w.focus(); } });
 
