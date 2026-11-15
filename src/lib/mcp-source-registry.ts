@@ -56,7 +56,7 @@ function isPdf(bytes: Uint8Array) {
 async function actualPageCount(bytes: Uint8Array): Promise<number> {
   // PDF.js' fake-worker import is rewritten to a non-existent chunk by the Next
   // server bundler. Run the existing parser in an isolated Node process instead.
-  const script = path.join(process.cwd(), "tools", "study-forge-mcp", "pdf-page-count.mjs");
+  const script = path.join(process.cwd(), "scripts", "pdf-page-count.mjs");
   const child = spawn(/* turbopackIgnore: true */ process.execPath, [script], {
     cwd: process.cwd(), windowsHide: true, stdio: ["pipe", "pipe", "ignore"],
   });
