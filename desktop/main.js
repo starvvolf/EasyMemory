@@ -74,6 +74,9 @@ function run(cmd, args, opts = {}) {
   });
 }
 async function up(url) { try { return (await fetch(url, { signal: AbortSignal.timeout(1500) })).status < 500; } catch { return false; } }
+function systemNodeMajor() {
+  try { return Number(/v(\d+)/.exec(require("node:child_process").execSync("node -v", { encoding: "utf8", windowsHide: true }))?.[1] ?? 0); } catch { return 0; }
+}
 const nextBin = () => path.join(root, "node_modules", "next", "dist", "bin", "next");
 const q = (p) => (isWin ? `"${p}"` : p);
 
@@ -125,10 +128,12 @@ async function startCourse() {
   if (await up(`${COURSE_ORIGIN}/api/status`)) return;
   const dir = path.join(root, "experiments", "project-course");
   splashLine(`③ 실습 서버 켜기(${COURSE_ORIGIN})\n`);
-  // 튜터(OpenCode)는 Node 24가 필요해서, 켜기 파일이 이 폴더의 .node24에 받아 둔다. 없으면 튜터 없이 켠다.
+  // 튜터(OpenCode)는 Node 24가 필요하다: 이 PC의 node가 24 이상이면 그대로, 아니면 켜기 파일이 받아 둔 .node24로. 둘 다 없으면 튜터 없이.
   const node24 = path.join(dir, ".node24", "node_modules", ".bin", isWin ? "node.cmd" : "node");
-  const useOc = fs.existsSync(node24) && fs.existsSync(path.join(dir, "node_modules", "@opencode", "sdk", "package.json"));
-  course = spawn(useOc ? q(node24) : "node", ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "server/main.ts"],
+  const sdk = fs.existsSync(path.join(dir, "node_modules", "@opencode", "sdk", "package.json"));
+  const runner = systemNodeMajor() >= 24 ? "node" : fs.existsSync(node24) ? q(node24) : null;
+  const useOc = sdk && !!runner;
+  course = spawn(useOc ? runner : "node", ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "server/main.ts"],
     { cwd: dir, shell: isWin, windowsHide: true, stdio: "ignore", env: { ...ENV, PC_NO_OPEN: "1", PC_OPEN: "", PC_PORT: new URL(COURSE_ORIGIN).port } });
   course.on("error", () => { course = null; });
   splashLine(`   뒤에서 켜요(${useOc ? "튜터 포함" : "튜터 없이: OpenCode가 없어요"}).\n`);

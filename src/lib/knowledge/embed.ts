@@ -5,18 +5,13 @@
 // from "different" (깊이/너비 우선 탐색 come out closer than 깊이 우선 탐색/DFS), so this only finds candidates; the learner
 // decides (합치기 · 잇기). Exact names and aliases are still matched first, by the store.
 //
-// The model loads only when candidates are asked for, once per server, and its files (about 300 MB, 8-bit) are kept
-// outside the data folder (RecallerData is synced through git): RECALLER_MODEL_DIR, else ~/.study-forge/models.
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { getKnowledge, readAll, tree, type ItemLite, type Knowledge } from "./store.ts";
 
 export const EMBED_MODEL = "onnx-community/embeddinggemma-300m-ONNX";
 const EMBED_DTYPE = "q8";
-/** EmbeddingGemma's prompt for comparing two short texts (the same one the comparison used). */
-const PREFIX = "task: sentence similarity | query: ";
 
 export type Embedder = (texts: string[]) => Promise<Float32Array[]>;
 let custom: Embedder | null = null;
@@ -25,23 +20,10 @@ export function setEmbedder(embedder: Embedder | null) { custom = embedder; }
 
 type Loaded = { run: Embedder };
 const holder = globalThis as unknown as { __recallerEmbed?: Promise<Loaded> };
+// 배포판: 같은 기억 찾기(임베딩)는 11/13부터 꺼져 있고 화면에서도 부르지 않아서, PC에서 모델을 돌리는 패키지(약 0.7GB)를 뺐다.
+// 부르는 곳이 생겨도 멈추지 않고 이 말로 답한다. 되살리려면 @huggingface/transformers를 설치하고 이 함수를 git 기록에서 되돌린다.
 async function loadGemma(): Promise<Loaded> {
-  const hf = await import("@huggingface/transformers");
-  hf.env.cacheDir = process.env.RECALLER_MODEL_DIR?.trim() || path.join(os.homedir(), ".study-forge", "models");
-  const tokenizer = await hf.AutoTokenizer.from_pretrained(EMBED_MODEL);
-  const model = await hf.AutoModel.from_pretrained(EMBED_MODEL, { dtype: EMBED_DTYPE });
-  const run: Embedder = async (texts) => {
-    const out: Float32Array[] = [];
-    for (let i = 0; i < texts.length; i += 16) {
-      const batch = texts.slice(i, i + 16).map((t) => PREFIX + t);
-      const inputs = await tokenizer(batch, { padding: true, truncation: true, max_length: 256 });
-      const { sentence_embedding } = await model(inputs) as { sentence_embedding: { data: Float32Array; dims: number[] } };
-      const dim = sentence_embedding.dims[1];
-      for (let j = 0; j < batch.length; j++) out.push(unit(Float32Array.from(sentence_embedding.data.subarray(j * dim, (j + 1) * dim))));
-    }
-    return out;
-  };
-  return { run };
+  throw Object.assign(new Error("배포판에는 없는 기능이에요(비슷한 기억 찾기)."), { status: 501 });
 }
 async function embed(texts: string[]): Promise<Float32Array[]> {
   if (!texts.length) return [];
