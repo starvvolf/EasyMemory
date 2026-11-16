@@ -1,7 +1,6 @@
-// 실습 정리 (11/16 사용자 "실습은 배운 거 담백하게 정리해서 알려주는 식", "알고리즘이랑 비슷하게 = 기본기 → A → B 층").
-// 실습은 상황 재현(빈틈 · 장면)을 만들지 않는다. 실습 한 판의 기록을 처음부터 따라가며 배운 것을 목차처럼 층으로 정리한다(AI 1번).
-// 첫 층은 기본기, 그다음은 만든 것을 이루는 단위들을 만든 순서대로. 코드 조각은 기록에 실제로 있는 것만 남긴다(코드가 확인).
-// 복습은 알고리즘(상황 재현 장면)과 다르게: 어렵거나 애매했던 개념만 플래시카드로 만들어 기억 저장소에 넣는다(카드 복습 · 라이트너 상자가 맡음).
+// 실습 정리 (11/16, 사용자 "실습에서 배운 메인 빌드만, 뭘 위해서 어떻게 한다는 식의 친절한 설명으로 실습 내용 복습하는 느낌").
+// 실습은 상황 재현(빈틈 · 장면)도, 카드도 만들지 않는다. 실습 한 판의 기록을 처음부터 따라가며 메인 빌드를 단계로 다시 들려준다(AI 1번).
+// 단계마다: 무엇을 위해 → 어떻게 했나 → 핵심 코드(기록에 있는 것만, 코드가 확인) → 기억할 것. 환경 설치 · 오타 같은 곁가지는 넣지 않는다.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { askJson } from "../assist/model.ts";
@@ -9,34 +8,25 @@ import { course } from "./practice/course.ts";
 
 type Ev = { at: string; kind: "me" | "tutor" | "button" | "cmd" | "save" | "note"; text: string; tools?: string[]; ok?: boolean; diff?: string[]; file?: string; err?: string };
 type Chapter = { goal: string; events: Ev[] };
-export type NoteCard = { q: string; a: string; knowledgeId?: string };
-export type Trace = { title: string; blocks: Array<{ file: string; code: string }>; cases: Array<{ situation: string; result: string }>; why: string; moments: number[]; knowledgeId?: string };
-export type Notes = { made: string; traces?: Trace[]; layers: Array<{ name: string; items: Array<{ name: string; learned: string; code: string; state: "확실" | "애매"; moments: number[]; card: NoteCard }> }> };
+export type Step = { title: string; why: string; how: string; code: Array<{ file: string; code: string }>; remember: string; moments: number[] };
+export type Notes = { made: string; steps: Step[] };
 export type NotesAsk = (system: string, user: string, schema: Record<string, unknown>) => Promise<Notes>;
 
-export const NOTES_SYSTEM = `실습(학습자가 직접 무언가를 만들며 튜터와 대화한 기록)을 처음부터 시간 순서대로 따라가며, 학습자가 배운 것을 담백하게 정리한다.
-목차처럼 층으로 나눈다:
-- 첫 층은 "기본기": 이 실습이 아니어도 쓰는 언어 문법 · 도구 · 명령 사용법.
-- 그다음 층은 만든 것을 이루는 단위들을, 만든 순서대로(예: 기본기 → 파일 읽기 → 단어 세기 → 결과 정렬). 층 이름은 짧게.
-층마다 배운 것(items):
-- name: 짧은 이름.
-- learned: 무엇을 어떻게 하는지 한두 문장. 쉬운 말로, 상황으로. 사실만.
-- code: 학습자가 실제로 쓰거나 돌린 코드 · 명령 한두 줄(기록에 그대로 있는 것만). 없으면 빈 문자열.
-- state: 확실(학습자가 스스로 해냄) / 애매(튜터가 고쳐 주거나 코드를 줘서 했거나, 해 놓고 다시 헷갈려 함).
-- moments: 근거가 된 순간 번호들.
-- card: 나중에 다시 물을 플래시카드. 기본기 층의 항목은 모두 만든다(짧게, 둘 중 무엇이 맞는지 헷갈린 것이면 그 두 모양을 q에). 다른 층(실습에서 쓴 개념)은 어렵거나 애매했던 것, 이 실습의 핵심이라 잊기 쉬운 것에만 만든다. q는 상황으로 묻는 질문 한 줄(예: "파일을 다 읽은 뒤 저절로 닫히게 하려면 어떻게 여나요?"), a는 짧은 답(필요하면 코드 한 줄). 카드를 만들지 않는 항목은 q · a를 빈 문자열로. 코드를 직접 쓰게 하는 문제는 만들지 않는다(읽고 떠올리는 질문만).
-평가 · 칭찬 · 탓 · 버릇 단정 · 조언은 쓰지 않는다. 배운 것이 없는 층은 만들지 않는다. 같은 것은 한 번만.
-made: 이 실습에서 만든 것을 한 줄로.
-traces: 실습에서 만든 코드를 읽고 따라가는 문제 0~3개(쓰게 하지 않고 읽고 결과 · 이유를 떠올리게). 학습자가 실제로 저장한 코드에서 서로 이어지는 블록 두세 개(예: 서버의 처리 함수와 그것을 부르는 클라이언트 코드, 함수와 그 호출부)를 골라, 상황에 따라 무엇이 나오는지 추적하게 한다.
-- blocks: 파일 이름과 코드(기록의 저장 내용에 그대로 있는 줄 몇 개씩, 앞의 + 표시는 뺌).
-- cases: 상황 두셋과 그때 나오는 결과(출력 · 응답 · 오류). 기록에서 실제로 나온 결과가 있으면 그것을 쓴다. 예: "이름 없이 요청하면" → "400과 '이름이 필요해요'".
-- why: 왜 그렇게 나오는지 한두 문장. title: 무엇을 따라가는지 짧게.
-이어지는 코드가 기록에 없으면 빈 배열.`;
+export const NOTES_SYSTEM = `실습(학습자가 직접 무언가를 만들며 튜터와 대화한 기록)을 처음부터 시간 순서대로 따라가며, 그 실습에서 만든 메인 빌드를 학습자에게 다시 들려주는 복습 글을 쓴다.
+- 메인 빌드만 다룬다: 만든 것이 어떤 단계를 거쳐 완성됐는지. 개발 환경 설치 · 경로 · 명령 옵션 · 오타 · 괄호 같은 곁가지는 쓰지 않는다(그것 때문에 오래 막혔어도 빌드의 단계가 아니면 뺀다).
+- steps: 만든 순서대로 3~7단계. 단계마다
+  · title: 그 단계에서 만든 것을 짧게(예: "두 연결을 동시에 받기").
+  · why: 이 단계가 무엇을 위해 필요했는지 한두 문장. 앞 단계에서 무엇이 모자라서 이걸 했는지 이어지게.
+  · how: 어떻게 했는지 2~4문장. 친절하게, 쉬운 말로, 상황으로 풀어서(용어는 처음 나올 때 한 번 풀어 준다). 학습자가 실제로 한 순서대로.
+  · code: 그 단계의 핵심 코드 한두 조각(파일 이름과, 기록의 저장 내용에 그대로 있는 줄 몇 개, 앞의 + 표시는 뺌). 없으면 빈 배열.
+  · remember: 이 단계에서 꼭 기억할 것 한 줄(헷갈렸던 점이 있으면 그것을 바로잡는 말로).
+  · moments: 근거가 된 순간 번호들.
+- made: 이 실습에서 만든 것을 한 줄로(무엇을 하는 프로그램인지).
+- 평가 · 칭찬 · 탓 · 조언 · "다음엔 ~해 보세요"는 쓰지 않는다. 기록에 없는 것은 지어내지 않는다.`;
 const str = { type: "string" } as const;
 const obj = (properties: Record<string, unknown>) => ({ type: "object", additionalProperties: false, required: Object.keys(properties), properties });
-export const NOTES_SCHEMA = obj({ made: str,
-  traces: { type: "array", items: obj({ title: str, blocks: { type: "array", items: obj({ file: str, code: str }) }, cases: { type: "array", items: obj({ situation: str, result: str }) }, why: str, moments: { type: "array", items: { type: "integer" } } }) },
-  layers: { type: "array", items: obj({ name: str, items: { type: "array", items: obj({ name: str, learned: str, code: str, state: { type: "string", enum: ["확실", "애매"] }, moments: { type: "array", items: { type: "integer" } }, card: obj({ q: str, a: str }) }) } }) } });
+export const NOTES_SCHEMA = obj({ made: str, steps: { type: "array", items: obj({ title: str, why: str, how: str,
+  code: { type: "array", items: obj({ file: str, code: str }) }, remember: str, moments: { type: "array", items: { type: "integer" } } }) } });
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
 const kst = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(11, 16);
@@ -59,45 +49,20 @@ export function notesUser(title: string, chapters: Chapter[]) {
   return { text: `[실습] ${title}\n${lines.join("\n")}`, count: n };
 }
 
-/** 코드가 확인: code는 기록 글에 실제로 있어야 남긴다. 기본기 층은 맨 앞으로. 빈 층은 뺀다. */
+/** 코드가 확인: 코드 조각은 기록에 실제로 있어야 남긴다(저장 내용의 줄 앞 +/- 표시는 떼고 비교). 빈 단계는 뺀다. */
 export function cleanNotes(notes: Notes, recordText: string): Notes {
-  const squash = (s: string) => s.replace(/\s+/g, "");
-  // 저장 내용의 줄 앞 +/- 표시는 떼고 비교한다(코드 조각이 여러 줄이어도 맞게)
+  const squash = (x: string) => x.replace(/\s+/g, "");
   const unmark = (c: string) => c.split("\n").map((l) => l.replace(/^[+-] ?/, "")).join("\n");
   const hay = squash(unmark(recordText));
-  const layers = (notes.layers ?? []).map((l) => ({ ...l, items: (l.items ?? []).filter((x) => x.name?.trim() && x.learned?.trim())
-    .map((x) => ({ ...x, code: x.code?.trim() && hay.includes(squash(x.code)) ? x.code.trim() : "", card: { q: x.card?.q?.trim() ?? "", a: x.card?.a?.trim() ?? "" } })) })).filter((l) => l.items.length);
-  const basic = layers.findIndex((l) => /기본기/.test(l.name));
-  if (basic > 0) layers.unshift(...layers.splice(basic, 1));
-  // 따라가 보기: 코드 블록은 기록에 있는 것만(앞의 +/- 표시를 뗀 줄들이 기록에 있어야), 블록이나 상황이 없으면 뺀다
-  const traces = (notes.traces ?? []).slice(0, 3).map((t) => ({ ...t, blocks: (t.blocks ?? []).map((b) => ({ file: b.file ?? "", code: unmark(b.code ?? "").trim() }))
-    .filter((b) => b.code && hay.includes(squash(b.code))), cases: (t.cases ?? []).filter((c) => c.situation?.trim() && c.result?.trim()) }))
-    .filter((t) => t.blocks.length && t.cases.length);
-  return { made: notes.made ?? "", traces, layers };
-}
-
-/** 카드가 있는 항목만 기억 저장소에(같은 이름이면 저장소가 합침). 실패해도 정리는 남긴다. */
-async function rememberCards(notes: Notes, title: string, runId: string) {
-  const withCard = notes.layers.flatMap((l) => l.items.filter((x) => x.card?.q?.trim() && x.card?.a?.trim()).map((x) => ({ l, x })));
-  const traces = notes.traces ?? [];
-  if (!withCard.length && !traces.length) return;
-  try {
-    const { saveMany } = await import("../knowledge/api.ts");
-    const saved = await saveMany(withCard.map(({ l, x }) => ({ title: x.name, body: `${x.card.a}${x.code ? `\n${x.code}` : ""}\n(${l.name} · ${x.learned})`, state: x.state === "애매" ? "unknown" as const : "met" as const,
-      source: { kind: "chat" as const, title, ref: runId }, ask: x.card.q, topicHint: /기본기/.test(l.name) ? "실습 기본기" : `실습 개념 · ${l.name}` })));
-    withCard.forEach(({ x }, i) => { if (saved[i]) x.card.knowledgeId = saved[i].item.id; });
-    // 따라가 보기도 카드로: 앞면 = 코드 + 상황들, 뒷면 = 상황별 결과 + 왜
-    const tr = await saveMany(traces.map((t) => ({ title: `따라가 보기: ${t.title}`, state: "unknown" as const, source: { kind: "chat" as const, title, ref: runId }, topicHint: "따라가 보기",
-      ask: `${t.blocks.map((b) => `[${b.file}]\n${b.code}`).join("\n\n")}\n\n${t.cases.map((c) => `· ${c.situation} → ?`).join("\n")}`,
-      body: `${t.cases.map((c) => `· ${c.situation} → ${c.result}`).join("\n")}\n왜: ${t.why}` })));
-    traces.forEach((t, i) => { if (tr[i]) t.knowledgeId = tr[i].item.id; });
-  } catch (e) { console.warn(`[practice-notes] 기억 저장소에 카드를 넣지 못했어요: ${(e as Error).message}`); }
+  const steps = (notes.steps ?? []).filter((x) => x.title?.trim() && (x.how?.trim() || x.why?.trim()))
+    .map((x) => ({ ...x, code: (x.code ?? []).map((c) => ({ file: c.file ?? "", code: unmark(c.code ?? "").trim() })).filter((c) => c.code && hay.includes(squash(c.code))) }));
+  return { made: notes.made ?? "", steps };
 }
 
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "practice-notes");
 const file = (runId: string) => path.join(dir(), `${runId}.json`);
 export async function readNotes(runId: string): Promise<{ at: string; notes: Notes } | null> {
-  try { return JSON.parse(await readFile(file(runId), "utf8")); } catch { return null; }
+  try { const d = JSON.parse(await readFile(file(runId), "utf8")); return Array.isArray(d?.notes?.steps) ? d : null; } catch { return null; } // 옛 모양(층 · 카드)은 다시 만든다
 }
 const defaultAsk: NotesAsk = (system, user, schema) => askJson<Notes>("practice:notes", system, user, schema, { model: "gpt-6.1-terra", effort: "medium" });
 /** 실습 한 판을 정리한다(AI 1번). 다시 하면 덮어쓴다. */
@@ -107,7 +72,6 @@ export async function makeNotes(runId: string, ask: NotesAsk = defaultAsk, given
   const { text, count } = notesUser(lib.title || "실습", chapters);
   if (!count) throw Object.assign(new Error("이 실습에는 아직 정리할 기록이 없어요."), { status: 400 });
   const notes = cleanNotes(await ask(NOTES_SYSTEM, text, NOTES_SCHEMA), text);
-  await rememberCards(notes, lib.title || "실습", runId);
   const out = { at: new Date().toISOString(), notes };
   await mkdir(dir(), { recursive: true });
   await writeFile(file(runId), JSON.stringify(out, null, 1), "utf8");
