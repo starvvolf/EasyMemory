@@ -28,22 +28,28 @@ export function PracticeNotes({ runId }: { runId: string }) {
       <p className="small muted">{sec}초째 · 보통 1분 안팎이에요. 어렵거나 애매했던 개념은 플래시카드로 만들어 기억 탭 카드 복습에 넣어요.</p></div> : null}
     {err ? <p className="small bad">{err}</p> : null}
     {notes && !busy ? <>
-      <p className="small"><b>목차</b> {notes.layers.map((l) => `${l.name} (${l.items.length})`).join(" → ")}{cards ? <span className="muted"> · 플래시카드 {cards}장</span> : null}</p>
-      {notes.layers.map((l, i) => <div key={i} className="sc-layer">
-        <p className="rv-eyebrow">{i + 1}. {l.name}</p>
-        <ul className="sc-gaplist">{l.items.map((x, k) => <li key={k}>
+      {/* 11/16 사용자: 실습 복습은 세 칸 — 기본기 / 실습에서 쓴 개념(층) / 실습에서 만든 코드 읽고 따라가기. 코드를 쓰게 하지 않는다. */}
+      <p className="small"><b>목차</b> {notes.layers.map((l) => `${l.name} (${l.items.length})`).join(" → ")}{cards ? <span className="muted"> · 복습 카드 {cards}장</span> : null}</p>
+      {(() => { const basic = notes.layers.filter((l) => /기본기/.test(l.name)), rest = notes.layers.filter((l) => !/기본기/.test(l.name));
+        const items = (x: Item, k: number) => <li key={k}>
           <div className="sc-gapline"><b>{x.name}</b>{x.state === "애매" ? <span className="sc-chip">애매</span> : null}</div>
           <p className="small">{x.learned}</p>
           {x.code ? <pre className="sc-code small">{x.code}</pre> : null}
-          {x.card?.q ? <p className="small muted">🃏 카드: {x.card.q}</p> : null}
-        </li>)}</ul></div>)}
-      {notes.traces?.length ? <div className="sc-layer"><p className="rv-eyebrow">따라가 보기 · 이 상황이면 무엇이 나올까</p>
+          {x.card?.q ? <p className="small muted">🃏 {x.card.q}</p> : null}
+        </li>;
+        return <>
+          {basic.length ? <div className="sc-layer"><p className="rv-eyebrow">① 기본기</p><ul className="sc-gaplist">{basic.flatMap((l) => l.items).map(items)}</ul></div> : null}
+          {rest.length ? <div className="sc-layer"><p className="rv-eyebrow">② 실습에서 쓴 개념</p>
+            {rest.map((l, i) => <div key={i}><p className="small"><b>{l.name}</b></p><ul className="sc-gaplist">{l.items.map(items)}</ul></div>)}</div> : null}
+        </>; })()}
+      {notes.traces?.length ? <div className="sc-layer"><p className="rv-eyebrow">③ 만든 코드 읽고 따라가기 · 이 상황이면 무엇이 나올까</p>
         {notes.traces.map((t, i) => <div key={i} className="sc-card">
           <p><b>{t.title}</b></p>
           {t.blocks.map((b, k) => <div key={k}><p className="small muted">{b.file}</p><pre className="sc-code small">{b.code}</pre></div>)}
           {t.cases.map((c, k) => <details key={k}><summary className="small">{c.situation} → ?</summary><p className="small"><b>{c.result}</b></p></details>)}
           <details><summary className="small muted">왜 그렇게 나오나</summary><p className="small">{t.why}</p></details>
         </div>)}</div> : null}
+      <p className="small muted">카드는 기억 탭의 카드 복습에서 날짜에 맞춰 다시 나와요. </p>
       <p className="small muted">정리한 때 {new Date(n!.at).toLocaleString("ko-KR")}</p></> : null}
   </section>;
 }

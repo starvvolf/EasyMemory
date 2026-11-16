@@ -24,10 +24,10 @@ export const NOTES_SYSTEM = `실습(학습자가 직접 무언가를 만들며 �
 - code: 학습자가 실제로 쓰거나 돌린 코드 · 명령 한두 줄(기록에 그대로 있는 것만). 없으면 빈 문자열.
 - state: 확실(학습자가 스스로 해냄) / 애매(튜터가 고쳐 주거나 코드를 줘서 했거나, 해 놓고 다시 헷갈려 함).
 - moments: 근거가 된 순간 번호들.
-- card: 나중에 다시 물을 플래시카드. 어렵거나 애매했던 개념(state가 애매이거나, 이 실습의 핵심이라 잊기 쉬운 것)에만 만든다. q는 상황으로 묻는 질문 한 줄(예: "파일을 다 읽은 뒤 저절로 닫히게 하려면 어떻게 여나요?"), a는 짧은 답(필요하면 코드 한 줄). 쉬운 것 · 문법 한 줄짜리는 q · a를 빈 문자열로.
+- card: 나중에 다시 물을 플래시카드. 기본기 층의 항목은 모두 만든다(짧게, 둘 중 무엇이 맞는지 헷갈린 것이면 그 두 모양을 q에). 다른 층(실습에서 쓴 개념)은 어렵거나 애매했던 것, 이 실습의 핵심이라 잊기 쉬운 것에만 만든다. q는 상황으로 묻는 질문 한 줄(예: "파일을 다 읽은 뒤 저절로 닫히게 하려면 어떻게 여나요?"), a는 짧은 답(필요하면 코드 한 줄). 카드를 만들지 않는 항목은 q · a를 빈 문자열로. 코드를 직접 쓰게 하는 문제는 만들지 않는다(읽고 떠올리는 질문만).
 평가 · 칭찬 · 탓 · 버릇 단정 · 조언은 쓰지 않는다. 배운 것이 없는 층은 만들지 않는다. 같은 것은 한 번만.
 made: 이 실습에서 만든 것을 한 줄로.
-traces: 따라가 보기 문제 0~3개. 학습자가 실제로 저장한 코드에서 서로 이어지는 블록 두세 개(예: 서버의 처리 함수와 그것을 부르는 클라이언트 코드, 함수와 그 호출부)를 골라, 상황에 따라 무엇이 나오는지 추적하게 한다.
+traces: 실습에서 만든 코드를 읽고 따라가는 문제 0~3개(쓰게 하지 않고 읽고 결과 · 이유를 떠올리게). 학습자가 실제로 저장한 코드에서 서로 이어지는 블록 두세 개(예: 서버의 처리 함수와 그것을 부르는 클라이언트 코드, 함수와 그 호출부)를 골라, 상황에 따라 무엇이 나오는지 추적하게 한다.
 - blocks: 파일 이름과 코드(기록의 저장 내용에 그대로 있는 줄 몇 개씩, 앞의 + 표시는 뺌).
 - cases: 상황 두셋과 그때 나오는 결과(출력 · 응답 · 오류). 기록에서 실제로 나온 결과가 있으면 그것을 쓴다. 예: "이름 없이 요청하면" → "400과 '이름이 필요해요'".
 - why: 왜 그렇게 나오는지 한두 문장. title: 무엇을 따라가는지 짧게.
@@ -84,7 +84,7 @@ async function rememberCards(notes: Notes, title: string, runId: string) {
   try {
     const { saveMany } = await import("../knowledge/api.ts");
     const saved = await saveMany(withCard.map(({ l, x }) => ({ title: x.name, body: `${x.card.a}${x.code ? `\n${x.code}` : ""}\n(${l.name} · ${x.learned})`, state: x.state === "애매" ? "unknown" as const : "met" as const,
-      source: { kind: "chat" as const, title, ref: runId }, ask: x.card.q, topicHint: l.name })));
+      source: { kind: "chat" as const, title, ref: runId }, ask: x.card.q, topicHint: /기본기/.test(l.name) ? "실습 기본기" : `실습 개념 · ${l.name}` })));
     withCard.forEach(({ x }, i) => { if (saved[i]) x.card.knowledgeId = saved[i].item.id; });
     // 따라가 보기도 카드로: 앞면 = 코드 + 상황들, 뒷면 = 상황별 결과 + 왜
     const tr = await saveMany(traces.map((t) => ({ title: `따라가 보기: ${t.title}`, state: "unknown" as const, source: { kind: "chat" as const, title, ref: runId }, topicHint: "따라가 보기",
