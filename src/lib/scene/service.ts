@@ -32,6 +32,8 @@ export const gapView = (g: Gap) => ({ id: g.id, branch: g.branch, title: g.title
 
 /** 실습 빈틈을 바닥으로 가져온다(실습 원장의 gap id로 한 번만). 상태 · 날짜는 바닥이 갖는다. 실습 서버가 꺼져 있으면 그냥 넘어간다. */
 async function syncPractice() {
+  // 11/16 사용자: 실습은 상황 재현을 만들지 않는다(배운 것 정리 + 어려운 개념 플래시카드, practice-notes.ts). 실습 빈틈은 가져오지 않는다.
+  if (process.env.RECALLER_PRACTICE_SCENES !== "1") return;
   const incoming = await practiceGaps().catch(() => [] as Gap[]);
   if (!incoming.length) return;
   await changeGaps((gaps) => {
@@ -46,7 +48,7 @@ async function syncPractice() {
 
 export async function today() {
   await syncPractice();
-  const gaps = await readGaps();
+  const gaps = (await readGaps()).filter((g) => g.branch === "algo" || process.env.RECALLER_PRACTICE_SCENES === "1");
   const d = dueToday(gaps);
   const part = (b: Gap["branch"]) => { const xs = d.gaps.filter((g) => g.branch === b); return { count: xs.length, minutes: xs.reduce((n, g) => n + SCOPE_MIN[g.scope], 0) }; };
   return { gaps: d.gaps.map(gapView), minutes: d.minutes, more: d.more, waiting: d.waiting, total: gaps.filter((g) => !g.state.known && !g.dismissed).length,
