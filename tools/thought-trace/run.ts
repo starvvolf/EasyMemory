@@ -24,9 +24,11 @@ const problemId = args.find((a) => !a.startsWith("--")) || "cp_20ef08b5115a"; //
 type Talk = { at: string; problemId: string; q: string; a: string; selection?: string; code?: string };
 type Sub = { at: string; problemId: string; mode: string; verdict: string; passed?: number; total?: number; code: string; lang?: string };
 const jsonl = <T>(file: string): T[] => existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } }) : [];
-const problem = JSON.parse(readFileSync(path.join(DATA, "code", "problems", `${problemId}.json`), "utf8"));
-const talk = jsonl<Talk>(path.join(DATA, "code", "tutor", "talk.jsonl")).filter((t) => t && t.problemId === problemId);
-const subs = jsonl<Sub>(path.join(DATA, "code", "submissions.jsonl")).filter((s) => s && s.problemId === problemId);
+// 풀이 기록은 RECORD_DIR에서 읽기만 한다(없으면 데이터 폴더). 예: 배포판 코드 · 로그인으로 다른 폴더의 기록을 돌려 볼 때.
+const REC = path.resolve(root, process.env.RECORD_DIR || DATA);
+const problem = JSON.parse(readFileSync(path.join(REC, "code", "problems", `${problemId}.json`), "utf8"));
+const talk = jsonl<Talk>(path.join(REC, "code", "tutor", "talk.jsonl")).filter((t) => t && t.problemId === problemId);
+const subs = jsonl<Sub>(path.join(REC, "code", "submissions.jsonl")).filter((s) => s && s.problemId === problemId);
 type Ev = { at: string; talk?: Talk; sub?: Sub };
 const events: Ev[] = [...talk.map((t) => ({ at: t.at, talk: t })), ...subs.map((s) => ({ at: s.at, sub: s }))].sort((a, b) => a.at.localeCompare(b.at));
 if (!events.length) { console.log(`${problemId}: 풀이 기록이 없어요.`); process.exit(1); }
@@ -78,6 +80,8 @@ end: 스스로 씀(뒤에 튜터 코드 없이 스스로 맞게 씀) / 튜터 �
    마지막 묶음이 막히지 않고 끝났으면 stuckAt을 0, stuck · kind · level을 빈 값으로 둔다.
 3. orderCheck: 묶음들을 띄워 놓고 보이는 생각의 순서 자체에 문제가 없는지 본다. 문제가 있으면 어떤 순서였고, 그 순서 때문에 무엇이 꼬였고, 어떤 순서였으면 덜 막혔을지 쓴다. 문제가 없으면 빈 배열.
 4. items: 기록 전체에서 걸린 것을 모두 모은다(발상 · 애매 · 기본기). 같은 것이 여러 번 걸렸으면 하나로 모으고 순간들을 다 적는다.
+   애매 항목은 basicPart(기본기 쪽에서 빠진 것)와 ideaPart(발상 쪽에서 빠진 것)를 따로 쓴다. 발상 · 기본기 항목은 둘 다 빈 문자열.
+   wrote: 학습자가 그 항목에서 실제로 틀리게 쓴 줄(예: virus=+1, queue.pop(neighbor)). 없으면 빈 문자열.
 5. flow: 묶음들을 이어 보면 생각이 어떻게 흘렀는지 몇 문장으로.
 
 규칙: 말뿐 아니라 코드도 읽는다(바로 앞 순간과 달라진 줄 포함, 튜터 답에 있던 코드를 옮긴 것인지 구분). 학습자를 평가하거나 탓하지 말고, 버릇을 단정하지 말고, 튜터를 평가하지 않는다. 드러나지 않은 것은 지어내지 않는다.`;
@@ -92,7 +96,7 @@ const LEVEL = en("애매하게 앎", "모름");
 const SCHEMA = obj({
   segments: arr(obj({ moments: arr(int), thinking: str, stuckAt: int, stuck: str, kind: en("발상", "애매", ""), level: en("애매하게 앎", "모름", ""), missing: str, hint: str, after: str, basics: arr(str) })),
   orderCheck: arr(obj({ moments: arr(int), order: str, problem: str, better: str })),
-  items: arr(obj({ item: str, kind: KIND, level: LEVEL, moments: arr(int), missing: str, why: str, end: en("스스로 씀", "튜터 코드 옮김", "남음") })),
+  items: arr(obj({ item: str, kind: KIND, level: LEVEL, moments: arr(int), missing: str, why: str, end: en("스스로 씀", "튜터 코드 옮김", "남음"), basicPart: str, ideaPart: str, wrote: str })),
   flow: str,
 });
 
@@ -105,7 +109,7 @@ if (dry) { writeFileSync(path.join(outDir, `${problemId}-${stamp}-input.txt`), `
 const { askJson } = await import("../../src/lib/assist/model.ts");
 type Reply = { segments: Array<{ moments: number[]; thinking: string; stuckAt: number; stuck: string; kind: string; level: string; missing: string; hint: string; after: string; basics: string[] }>;
   orderCheck: Array<{ moments: number[]; order: string; problem: string; better: string }>;
-  items: Array<{ item: string; kind: string; level: string; moments: number[]; missing: string; why: string; end: string }>; flow: string };
+  items: Array<{ item: string; kind: string; level: string; moments: number[]; missing: string; why: string; end: string; basicPart: string; ideaPart: string; wrote: string }>; flow: string };
 const effort = process.env.THOUGHT_EFFORT || "medium";
 if (!process.env.THOUGHT_REPLY_FILE) console.log(`ChatGPT에 한 번 보내요(gpt-6.1-terra · ${effort}). 1~3분쯤 걸려요...`);
 const started = Date.now();
@@ -132,5 +136,18 @@ const md = [`# 생각 따라가기 — ${problem.title}`, "", `- 순간 ${events
   ...(reply.orderCheck.length ? reply.orderCheck.flatMap((o, i) => [`${i + 1}. ${o.order} (${ms(o.moments)})`, `   - 문제: ${o.problem}`, `   - 이랬으면: ${o.better}`]) : ["순서에 문제 없음"]), "",
   "## 걸린 것 세 갈래", "", "### 발상", "", ...group("발상"), "", "### 애매 (기본기 + 발상)", "", ...group("애매"), "", "### 기본기", "", ...group("기본기"), "",
   "## 전체 흐름", "", reply.flow, ""].join("\n");
-writeFileSync(`${base}.md`, md);
+let full = md;
+if (!args.includes("--follow-only")) {
+  const { targetsOf, makeBasics, makeIdeas, renderProblems } = await import("./make.ts");
+  const lang = subs.at(-1)?.lang || "python";
+  const momentList = events.map((e, i) => ({ n: i + 1, code: (e.talk?.code ?? e.sub?.code ?? "").replace(/\r/g, "").replace(/\s+$/, ""), hint: e.talk?.a ?? "" }));
+  const { ideas, basics } = targetsOf(reply.items, reply.segments, momentList);
+  console.log(`다시 물을 문제: 기본기 ${basics.length}개(묶음) · 발상 ${ideas.length}개`);
+  const t0 = Date.now();
+  const [basicMade, ideaMade] = await Promise.all([makeBasics(basics, lang, console.log), makeIdeas(ideas, lang, problem.title, console.log)]);
+  const made = { sec: Math.round((Date.now() - t0) / 1000), basics: basicMade, ideas: ideaMade };
+  writeFileSync(`${base}-problems.json`, JSON.stringify(made, null, 1));
+  full = [md, `# 다시 물을 문제 (${made.sec}초)`, "", ...renderProblems(basicMade, ideaMade)].join("\n");
+}
+writeFileSync(`${base}.md`, full);
 console.log(`끝났어요: ${sec}초. 결과: ${base}.md`);
