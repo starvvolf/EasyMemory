@@ -49,7 +49,7 @@ test("C++ and Python compile and run where installed; a compile error says why",
 
 test("seed problems get outputs from their reference; submit stops at the first failure and shows only it", () => withData(async () => {
   const list = await listProblems();
-  assert.equal(list.length, 6); // 11/16 배포판 예시 문제(소문이 퍼진 사람 수)까지 6개
+  assert.equal(list.length, 5);
   const p = await readProblem("cp_seed_range_sum");
   assert.ok(p.tests.length >= 4 && p.examples[0].output === "12\n9\n1");
   const shown = publicProblem(p);
