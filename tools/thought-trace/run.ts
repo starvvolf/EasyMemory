@@ -57,32 +57,42 @@ const blocks = events.map((e, i) => {
 });
 
 const SYSTEM = `너는 알고리즘 문제 풀이 기록을 처음부터 시간 순서대로 따라가며, 학습자의 생각이 어떻게 이어지다가 막히는지 본다.
-볼 것은 이 문제를 푸는 알고리즘 개념뿐이다(예: 연결을 어떻게 담나, 시작점에서 어떻게 퍼져 나가나, 무엇을 다시 보지 않게 막나, 언제까지 반복하나). 입력 받기 · 문법 · 표기 · 오타 · 앱 사용 같은 곁가지는 막힘으로 세지 않는다.
+
+[걸린 것의 세 갈래] 학습자가 걸린 것은 왜 막혔는지로 나눈다(겉모양이 아니라 이유로):
+- 발상: 이 문제를 풀려고 떠올려야 하는 생각(예: 연결을 어떻게 담나, 시작점에서 어떻게 퍼져 나가나, 무엇을 다시 보지 않게 막나, 언제까지 반복하나).
+- 기본기: 이 문제가 아니어도 그 언어를 쓰면 필요한 것(예: 입력 받기, for문, append, 리스트 만들기, +=, pop의 인자가 위치라는 것).
+- 애매: 기본기와 발상이 겹쳐 있어 한쪽으로 나누기 어려운 것(예: 넣자마자 pop으로 다시 뺌 — pop 사용법도 흔들리고 "대기줄은 나중에 볼 목록"이라는 발상도 없음). 어느 부분이 기본기고 어느 부분이 발상인지 why에 쓴다.
+앱 사용 · 입력 칸 · 실행 환경 문제와 단순 오타는 넣지 않는다.
+level: 애매하게 앎(방향 · 이름은 있지만 구체적인 방법을 스스로 못 만듦) / 모름(그게 무엇인지 자체를 모름).
+end: 스스로 씀(뒤에 튜터 코드 없이 스스로 맞게 씀) / 튜터 코드 옮김 / 남음(끝까지 흔들림).
 
 하는 일:
-1. 생각을 따라간다. 생각이 이어지다가 알고리즘 개념에서 딱 막히는 순간을 체크한다.
-2. 막힌 뒤 힌트(튜터 답)를 받아 다시 가다가 또 막히면 또 체크한다. 이렇게 막힘과 막힘 사이를 "생각 묶음" 하나로 나눈다. 묶음은 시간 순서대로 빠짐없이 이어져야 한다.
-3. 묶음마다:
-   - thinking: 그 묶음 안에서 학습자의 생각이 어떤 순서로 이어졌는지 짧게(→로 이어도 된다)
-   - stuckAt / stuck: 어느 순간에, 어떤 알고리즘 개념에서 막혔는지
-   - level: 그 개념을 애매하게 아는지(방향 · 이름은 있지만 구체적인 방법을 스스로 못 만듦), 모르는지(그게 무엇인지 자체를 모름)
+1. 생각을 따라간다. 발상이나 애매에서 딱 막히는 순간을 체크하고, 막힘과 막힘 사이를 "생각 묶음" 하나로 나눈다. 기본기에서 걸린 것은 묶음을 끊지 않고 그 묶음의 basics에 적는다. 묶음은 시간 순서대로 빠짐없이 이어져야 한다.
+2. 묶음마다:
+   - thinking: 그 묶음 안에서 생각이 어떤 순서로 이어졌는지 짧게(→로 이어도 된다)
+   - stuckAt / stuck / kind / level: 어느 순간에, 무엇에서 막혔는지, 발상인지 애매인지, 애매하게 아는지 모르는지
    - missing: 스스로 만들지 못한 그 한 조각을 구체적으로
    - hint: 다시 움직이게 한 힌트의 요지
    - after: 힌트를 받은 뒤 생각이 어떻게 갔는지(이해한 것이 다음 코드나 말에 이어졌는지, 다시 막혔는지)
-   마지막 묶음은 막히지 않고 끝났으면 stuckAt을 0, stuck과 level을 빈 값으로 둔다.
-4. orderCheck: 묶음들을 띄워 놓고 보이는 생각의 순서 자체에 문제가 없는지 본다. 문제가 있으면 어떤 순서였고, 그 순서 때문에 무엇이 꼬였고, 어떤 순서였으면 덜 막혔을지 쓴다. 문제가 없으면 빈 배열.
+   - basics: 이 묶음 안에서 걸린 기본기(짧게)
+   마지막 묶음이 막히지 않고 끝났으면 stuckAt을 0, stuck · kind · level을 빈 값으로 둔다.
+3. orderCheck: 묶음들을 띄워 놓고 보이는 생각의 순서 자체에 문제가 없는지 본다. 문제가 있으면 어떤 순서였고, 그 순서 때문에 무엇이 꼬였고, 어떤 순서였으면 덜 막혔을지 쓴다. 문제가 없으면 빈 배열.
+4. items: 기록 전체에서 걸린 것을 모두 모은다(발상 · 애매 · 기본기). 같은 것이 여러 번 걸렸으면 하나로 모으고 순간들을 다 적는다.
 5. flow: 묶음들을 이어 보면 생각이 어떻게 흘렀는지 몇 문장으로.
 
-규칙: 말뿐 아니라 코드도 읽는다(바로 앞 순간과 달라진 줄 포함). 학습자를 평가하거나 탓하지 말고, 버릇을 단정하지 말고, 튜터를 평가하지 않는다. 드러나지 않은 것은 지어내지 않는다.`;
+규칙: 말뿐 아니라 코드도 읽는다(바로 앞 순간과 달라진 줄 포함, 튜터 답에 있던 코드를 옮긴 것인지 구분). 학습자를 평가하거나 탓하지 말고, 버릇을 단정하지 말고, 튜터를 평가하지 않는다. 드러나지 않은 것은 지어내지 않는다.`;
 const USER = `[문제] ${problem.title}\n${problem.statement}\n\n[풀이 기록] 시간 순서, 한국 시간. 순간 ${events.length}개.\n\n${blocks.join("\n\n")}`;
 const str = { type: "string" } as const;
 const int = { type: "integer" } as const;
 const arr = (items: unknown) => ({ type: "array", items });
 const en = (...v: string[]) => ({ type: "string", enum: v });
 const obj = (properties: Record<string, unknown>) => ({ type: "object", additionalProperties: false, required: Object.keys(properties), properties });
+const KIND = en("발상", "애매", "기본기");
+const LEVEL = en("애매하게 앎", "모름");
 const SCHEMA = obj({
-  segments: arr(obj({ moments: arr(int), thinking: str, stuckAt: int, stuck: str, level: en("애매", "모름", ""), missing: str, hint: str, after: str })),
+  segments: arr(obj({ moments: arr(int), thinking: str, stuckAt: int, stuck: str, kind: en("발상", "애매", ""), level: en("애매하게 앎", "모름", ""), missing: str, hint: str, after: str, basics: arr(str) })),
   orderCheck: arr(obj({ moments: arr(int), order: str, problem: str, better: str })),
+  items: arr(obj({ item: str, kind: KIND, level: LEVEL, moments: arr(int), missing: str, why: str, end: en("스스로 씀", "튜터 코드 옮김", "남음") })),
   flow: str,
 });
 
@@ -93,8 +103,9 @@ console.log(`${problem.title}: 순간 ${events.length}개, 보낼 글 ${SYSTEM.l
 if (dry) { writeFileSync(path.join(outDir, `${problemId}-${stamp}-input.txt`), `${SYSTEM}\n\n=====\n\n${USER}`); console.log("--dry: 보내지 않고 입력만 저장했어요."); process.exit(0); }
 
 const { askJson } = await import("../../src/lib/assist/model.ts");
-type Reply = { segments: Array<{ moments: number[]; thinking: string; stuckAt: number; stuck: string; level: string; missing: string; hint: string; after: string }>;
-  orderCheck: Array<{ moments: number[]; order: string; problem: string; better: string }>; flow: string };
+type Reply = { segments: Array<{ moments: number[]; thinking: string; stuckAt: number; stuck: string; kind: string; level: string; missing: string; hint: string; after: string; basics: string[] }>;
+  orderCheck: Array<{ moments: number[]; order: string; problem: string; better: string }>;
+  items: Array<{ item: string; kind: string; level: string; moments: number[]; missing: string; why: string; end: string }>; flow: string };
 const effort = process.env.THOUGHT_EFFORT || "medium";
 if (!process.env.THOUGHT_REPLY_FILE) console.log(`ChatGPT에 한 번 보내요(gpt-6.1-terra · ${effort}). 1~3분쯤 걸려요...`);
 const started = Date.now();
@@ -107,12 +118,19 @@ const sec = saved ? saved.sec : Math.round((Date.now() - started) / 1000);
 const base = path.join(outDir, `${problemId}-${stamp}`);
 if (!saved) writeFileSync(`${base}.json`, JSON.stringify({ problemId, at: new Date().toISOString(), sec, usage, effort, reply }, null, 1));
 const span = (xs: number[]) => xs.length ? (xs.length > 1 ? `#${Math.min(...xs)}~#${Math.max(...xs)}` : `#${xs[0]}`) : "";
+const ms = (xs: number[]) => xs.map((m) => `#${m}`).join(" ");
+// 갈래별로 코드가 모은다: 발상 → 애매 → 기본기, 그 안에서 남음 → 튜터 코드 옮김 → 스스로 씀
+const END = ["남음", "튜터 코드 옮김", "스스로 씀"];
+const group = (kind: string) => reply.items.filter((x) => x.kind === kind).sort((x, y) => END.indexOf(x.end) - END.indexOf(y.end))
+  .flatMap((x) => [`- **${x.item}** — ${x.level}, ${x.end} (${ms(x.moments)})`, ...(x.missing ? [`   - 빠진 조각: ${x.missing}`] : []), ...(x.why ? [`   - ${kind === "애매" ? "어디가 기본기 · 어디가 발상" : "왜"}: ${x.why}`] : [])]);
 const md = [`# 생각 따라가기 — ${problem.title}`, "", `- 순간 ${events.length}개 · AI 1번 · ${sec}초 · 토큰 ${JSON.stringify(usage ?? {})}`, "",
-  "## 생각 묶음 (막힌 곳마다 끊음)", "",
+  "## 생각 묶음 (발상 · 애매에서 막힌 곳마다 끊음)", "",
   ...reply.segments.flatMap((g, i) => [`### 묶음 ${i + 1} (${span(g.moments)})`, "", `- 생각: ${g.thinking}`,
-    ...(g.stuckAt ? [`- **막힘 #${g.stuckAt}: ${g.stuck}** [${g.level}]`, `   - 빠진 조각: ${g.missing}`, `   - 힌트: ${g.hint}`, `   - 그 뒤: ${g.after}`] : ["- 막히지 않고 끝남"]), ""]),
+    ...(g.stuckAt ? [`- **막힘 #${g.stuckAt} [${g.kind} · ${g.level}]: ${g.stuck}**`, `   - 빠진 조각: ${g.missing}`, `   - 힌트: ${g.hint}`, `   - 그 뒤: ${g.after}`] : ["- 막히지 않고 끝남"]),
+    ...(g.basics.length ? [`- 걸린 기본기: ${g.basics.join(" / ")}`] : []), ""]),
   "## 생각의 순서", "",
-  ...(reply.orderCheck.length ? reply.orderCheck.flatMap((o, i) => [`${i + 1}. ${o.order} (${o.moments.map((m) => `#${m}`).join(" ")})`, `   - 문제: ${o.problem}`, `   - 이랬으면: ${o.better}`]) : ["순서에 문제 없음"]), "",
+  ...(reply.orderCheck.length ? reply.orderCheck.flatMap((o, i) => [`${i + 1}. ${o.order} (${ms(o.moments)})`, `   - 문제: ${o.problem}`, `   - 이랬으면: ${o.better}`]) : ["순서에 문제 없음"]), "",
+  "## 걸린 것 세 갈래", "", "### 발상", "", ...group("발상"), "", "### 애매 (기본기 + 발상)", "", ...group("애매"), "", "### 기본기", "", ...group("기본기"), "",
   "## 전체 흐름", "", reply.flow, ""].join("\n");
 writeFileSync(`${base}.md`, md);
 console.log(`끝났어요: ${sec}초. 결과: ${base}.md`);
