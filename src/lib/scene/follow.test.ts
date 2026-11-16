@@ -19,6 +19,7 @@ const rec = {
 } as never;
 
 const FOLLOW = {
+  toc: [{ part: "기본기", subs: [{ name: "", items: ["+= 증가"] }] }, { part: "연결 저장", subs: [{ name: "양쪽에 담기", items: ["양방향 인접 리스트"] }] }],
   segments: [{ moments: [1], thinking: "t", stuckAt: 1, stuck: "양방향", kind: "발상", level: "애매하게 앎", missing: "양쪽에", hint: "반대쪽도", after: "a", basics: [] }],
   orderCheck: [], flow: "f",
   items: [
@@ -44,6 +45,8 @@ test("따라가기 결과로 빈틈과 첫 장면(발상 · 기본기)을 만들
   assert.equal(gaps.length, 2, "두 쪽이 다 빈 애매 항목은 빈틈이 아니다");
   const idea = gaps.find((g) => g.kind === "알고리즘 구현")!, basic = gaps.find((g) => g.kind === "문법")!;
   assert.equal(idea.state.distance, "near");
+  assert.deepEqual(idea.unit, { part: "연결 저장", sub: "양쪽에 담기", order: 2 });
+  assert.deepEqual(basic.unit, { part: "기본기", sub: "", order: 1 });
   assert.ok(idea.wrongVerified && basic.wrongVerified);
   assert.equal(idea.evidence[0].type, "talk");
   const s1 = await unusedScene(idea.id, "near"), s2 = await unusedScene(basic.id, "near");

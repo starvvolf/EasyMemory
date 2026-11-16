@@ -28,7 +28,7 @@ export function publicScene(s: Scene) {
 export const gapView = (g: Gap) => ({ id: g.id, branch: g.branch, title: g.title, kind: g.kind, layer: g.layer, target: g.target, missed: g.missed, wrong: g.wrong, scope: g.scope, dose: g.dose.level,
   distance: g.state.distance, known: g.state.known, due: g.state.due, passes: g.state.passes, sameMistakes: g.state.sameMistakes, unclear: g.state.unclear,
   origin: g.origin, wrongVerified: g.wrongVerified, doubtful: Boolean(g.doubtful), dismissed: Boolean(g.dismissed), topic: g.topic,
-  evidence: g.evidence.length, hasCode: g.evidence.some((e) => e.type === "submission") });
+  evidence: g.evidence.length, hasCode: g.evidence.some((e) => e.type === "submission"), ...(g.unit ? { unit: g.unit } : {}) });
 
 /** 실습 빈틈을 바닥으로 가져온다(실습 원장의 gap id로 한 번만). 상태 · 날짜는 바닥이 갖는다. 실습 서버가 꺼져 있으면 그냥 넘어간다. */
 async function syncPractice() {

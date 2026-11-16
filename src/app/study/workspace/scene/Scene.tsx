@@ -12,7 +12,8 @@ import "./scene.css";
 
 export type GapLite = { id: string; branch: "algo" | "practice"; title: string; kind: string; layer: number; target: "ability" | "form"; missed: string; wrong: string; scope: string; dose: number;
   distance: "same" | "near" | "far"; known: boolean; due: string; passes: number; sameMistakes: number; unclear: number;
-  origin: { problemId: string; title: string; lang: string; runId?: string }; wrongVerified: boolean; doubtful: boolean; dismissed: boolean; topic: string; evidence: number; hasCode: boolean };
+  origin: { problemId: string; title: string; lang: string; runId?: string }; wrongVerified: boolean; doubtful: boolean; dismissed: boolean; topic: string; evidence: number; hasCode: boolean;
+  /** 생각 따라가기의 목차(파트 · 작은 묶음 · 순서) */ unit?: { part: string; sub: string; order: number } };
 type Format = "write" | "blank" | "predict" | "fix" | "choice" | "order" | "function" | "counter" | "draw" | "variant" | "error" | "why" | "where" | "timeline" | "command" | "project" | "origin";
 export type SceneLite = { id: string; gapId: string; format: Format; lang: string; distance: GapLite["distance"]; story: string; ask: string;
   setup: string; after: string; template: string; code: string; inputs: string[]; failing: string[]; choices: string[]; minutes: number;
@@ -332,12 +333,14 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
   const open = gaps?.filter((g) => !g.known && !g.dismissed) ?? [];
   return <section className="sc-gaps">
     <header className="sc-gapshead"><span className="rv-eyebrow">상황 재현</span><h3 className="rv-title">{runId ? "이 실습에서 놓친 생각" : "이 풀이에서 놓친 생각"}</h3><span className="cs-gap" />
-      {open.length ? <button className="btn small primary" onClick={() => setSession({ ids: open.sort((a, b) => a.layer - b.layer || a.dose - b.dose).map((g) => g.id) })}>모두 확인하기(추천대로)</button> : null}</header>
+      {open.length ? <button className="btn small primary" onClick={() => setSession({ ids: open.sort((a, b) => (a.unit?.order ?? 999) - (b.unit?.order ?? 999) || a.layer - b.layer || a.dose - b.dose).map((g) => g.id) })}>모두 확인하기(추천대로)</button> : null}</header>
     {busy ? <p className="small muted"><span className="lc2-caret" /> 풀이 기록을 처음부터 따라가며 막힌 곳을 찾고, 다시 물을 문제를 만드는 중이에요… (AI 여러 번, 2~3분)</p> : null}
     {problemId && !busy && gaps?.length ? <FollowView problemId={problemId} key={gaps.map((g) => g.id).join()} /> : null}
     {err ? <p className="small bad">{err}</p> : null}
     {gaps && !gaps.length && !busy ? <div className="row small"><span className="muted">{runId ? "아직 없어요. 목표를 마치면 실습 정리에서 생겨요." : "아직 찾지 않았어요."}</span>{problemId ? <button className="btn small" onClick={() => void find()}>놓친 생각 찾기</button> : null}</div> : null}
-    {gaps?.length ? <ol className="sc-gaplist">{gaps.map((g) => <li key={g.id} className={g.known || g.dismissed ? "known" : ""}>
+    {gaps?.length ? <ol className="sc-gaplist">{[...gaps].sort((a, b) => (a.unit?.order ?? 999) - (b.unit?.order ?? 999)).map((g, i, all) => <li key={g.id} className={g.known || g.dismissed ? "known" : ""}>
+      {g.unit && (i === 0 || all[i - 1].unit?.part !== g.unit.part) ? <p className="rv-eyebrow">{g.unit.part}</p> : null}
+      {g.unit?.sub && (i === 0 || all[i - 1].unit?.sub !== g.unit.sub || all[i - 1].unit?.part !== g.unit.part) ? <p className="small muted">· {g.unit.sub}</p> : null}
       <div className="sc-gapline"><span className="sc-chip">{g.kind}</span><b>{g.title}</b><span className="cs-gap" />
         {g.dismissed ? <Ladder g={g} /> : <DistancePick g={g} onPick={(d) => setSession({ ids: [g.id], ...(d !== g.distance || g.known ? { pick: d } : {}) })} />}</div>
       <p className="small">{g.missed}{g.wrong ? <span className="muted"> · 그때: {g.wrong}</span> : null}</p>
@@ -351,7 +354,7 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
 }
 
 /** 생각 따라가기 결과(11/16): 막힌 곳마다 끊은 생각 묶음 · 생각의 순서 · 흐름. 접어 두고 펼쳐 본다. */
-type Follow = { segments: Array<{ moments: number[]; thinking: string; stuckAt: number; stuck: string; kind: string; level: string; missing: string; hint: string; after: string; basics: string[] }>;
+type Follow = { toc?: Array<{ part: string; subs: Array<{ name: string; items: string[] }> }>; segments: Array<{ moments: number[]; thinking: string; stuckAt: number; stuck: string; kind: string; level: string; missing: string; hint: string; after: string; basics: string[] }>;
   orderCheck: Array<{ moments: number[]; order: string; problem: string; better: string }>; flow: string };
 function FollowView({ problemId }: { problemId: string }) {
   const [f, setF] = useState<Follow | null>(null);
@@ -360,6 +363,7 @@ function FollowView({ problemId }: { problemId: string }) {
   const span = (xs: number[]) => (xs.length > 1 ? `#${Math.min(...xs)}~#${Math.max(...xs)}` : xs.length ? `#${xs[0]}` : "");
   return <details className="sc-follow">
     <summary className="small"><b>생각의 흐름</b> <span className="muted">막힌 곳마다 끊은 생각 묶음 {f.segments.length}개</span></summary>
+    {f.toc?.length ? <p className="small"><b>목차</b> {f.toc.map((p) => `${p.part} ${p.subs.length > 1 ? p.subs.map((x) => `(${x.items.length})`).join("") : `(${p.subs.reduce((n, x) => n + x.items.length, 0)})`}`).join(" / ")}</p> : null}
     <ol className="sc-gaplist">{f.segments.map((g, i) => <li key={i}>
       <div className="sc-gapline"><span className="sc-chip">{span(g.moments)}</span><span className="small">{g.thinking}</span></div>
       {g.stuckAt ? <p className="small"><b>막힘 #{g.stuckAt} · {g.kind} · {g.level}</b> {g.stuck}<br /><span className="muted">빠진 조각:</span> {g.missing}<br /><span className="muted">힌트 뒤:</span> {g.after}</p>

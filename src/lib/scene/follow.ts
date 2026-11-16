@@ -31,6 +31,9 @@ level: 애매하게 앎(방향 · 이름은 있지만 구체적인 방법을 스
 end: 스스로 씀(뒤에 튜터 코드 없이 스스로 맞게 씀) / 튜터 코드 옮김 / 남음(끝까지 흔들림).
 
 하는 일:
+0. toc(목차): 먼저 이 문제의 풀이를 목차처럼 파트로 나눈다. 첫 파트는 "기본기", 그다음은 풀이를 이루는 단위들을 풀이 순서대로(예: 기본기 / 연결 저장 / BFS 한 바퀴). 파트 안에서 더 작게 나뉘면 작은 묶음(sub)을 두고, 나뉘지 않으면 sub 하나(name "")만 둔다.
+   4번의 items를 하나도 빠짐없이, 겹치지 않게 어느 파트 · 묶음에 넣는다(items의 item 이름 그대로). 기본기 항목은 기본기 파트에, 발상 · 애매 항목은 그 발상이 속한 파트에. 걸린 것이 없는 파트 · 묶음은 만들지 않는다.
+   파트 수 · 묶음 수는 정해져 있지 않다(예: 항목 14개가 5/5/4로 나뉠 수도, (2)(3)/5/(2)(2)로 나뉠 수도 있다). 합치면 하나의 단위가 되는 것끼리 같은 파트에 둔다.
 1. 생각을 따라간다. 발상이나 애매에서 딱 막히는 순간을 체크하고, 막힘과 막힘 사이를 "생각 묶음" 하나로 나눈다. 기본기에서 걸린 것은 묶음을 끊지 않고 그 묶음의 basics에 적는다. 묶음은 시간 순서대로 빠짐없이 이어져야 한다.
 2. 묶음마다: thinking(그 묶음 안에서 생각이 이어진 순서, →로 이어도 됨), stuckAt · stuck · kind · level(어느 순간에 무엇에서 막혔나, 발상인지 애매인지, 애매하게 아는지 모르는지), missing(스스로 만들지 못한 한 조각), hint(다시 움직이게 한 힌트의 요지), after(힌트 뒤 생각이 어떻게 갔나), basics(이 묶음 안에서 걸린 기본기). 마지막 묶음이 막히지 않고 끝났으면 stuckAt 0, stuck · kind · level은 빈 값.
 3. orderCheck: 묶음들을 띄워 놓고 보이는 생각의 순서 자체에 문제가 없는지 본다. 있으면 어떤 순서였고, 그 순서 때문에 무엇이 꼬였고, 어떤 순서였으면 덜 막혔을지. 없으면 빈 배열.
@@ -41,12 +44,14 @@ end: 스스로 씀(뒤에 튜터 코드 없이 스스로 맞게 씀) / 튜터 �
 
 규칙: 말뿐 아니라 코드도 읽는다(바로 앞 순간과 달라진 줄 포함, 튜터 답에 있던 코드를 옮긴 것인지 구분). 학습자를 평가하거나 탓하지 말고, 버릇을 단정하지 말고, 튜터를 평가하지 않는다. 드러나지 않은 것은 지어내지 않는다.`;
 export const FOLLOW_SCHEMA = obj({
+  toc: arr(obj({ part: str, subs: arr(obj({ name: str, items: arr(str) })) })),
   segments: arr(obj({ moments: arr(int), thinking: str, stuckAt: int, stuck: str, kind: en("발상", "애매", ""), level: en("애매하게 앎", "모름", ""), missing: str, hint: str, after: str, basics: arr(str) })),
   orderCheck: arr(obj({ moments: arr(int), order: str, problem: str, better: str })),
   items: arr(obj({ item: str, kind: en("발상", "애매", "기본기"), level: en("애매하게 앎", "모름"), moments: arr(int), missing: str, why: str, end: en("스스로 씀", "튜터 코드 옮김", "남음"), basicPart: str, ideaPart: str, wrote: str })),
   flow: str,
 });
 export type FollowReply = {
+  toc?: Array<{ part: string; subs: Array<{ name: string; items: string[] }> }>;
   segments: Array<{ moments: number[]; thinking: string; stuckAt: number; stuck: string; kind: string; level: string; missing: string; hint: string; after: string; basics: string[] }>;
   orderCheck: Array<{ moments: number[]; order: string; problem: string; better: string }>;
   items: Array<{ item: string; kind: string; level: string; moments: number[]; missing: string; why: string; end: string; basicPart: string; ideaPart: string; wrote: string }>;
@@ -176,9 +181,20 @@ export async function followGaps(problemId: string, rec: Record_, ask: Ask): Pro
     const m = at(n); if (!m) return [];
     return m.talk ? [{ type: "talk", at: m.at, quote: m.talk.q.slice(0, 200) }] : [{ type: "submission", id: m.sub!.id, verdict: m.sub!.verdict }];
   };
+  // 목차: 항목 이름 → 파트 · 묶음 · 순서(코드가 확인: 목록에 없는 이름은 무시, 처음 넣은 곳만). 애매의 기본기 쪽은 기본기 파트로.
+  const unitOf = new Map<string, { part: string; sub: string; order: number }>();
+  const firstOrder = new Map<string, number>();
+  let order = 0;
+  for (const p of reply.toc ?? []) for (const sub of p.subs ?? []) {
+    order++; if (!firstOrder.has(p.part)) firstOrder.set(p.part, order);
+    for (const it of sub.items ?? []) if (!unitOf.has(it)) unitOf.set(it, { part: p.part, sub: sub.name, order });
+  }
+  const basicPart = (reply.toc ?? []).find((p) => /기본기/.test(p.part))?.part ?? "기본기";
+  const basicUnit = { part: basicPart, sub: "", order: firstOrder.get(basicPart) ?? 0 };
   const made: Array<{ gap: Gap; stuck: { code: string; hint: string } }> = [];
   const add = (kind: GapKind, title: string, missed: string, x: FollowReply["items"][number]) => {
     const n = stuckOf(x.moments), m = at(n), seg = reply.segments.find((s) => s.stuckAt === n);
+    const unit = x.kind === "애매" && kind === "문법" ? basicUnit : unitOf.get(x.item) ?? (kind === "문법" ? basicUnit : undefined);
     const evidence = evidenceOf(n);
     if (!missed.trim() || !evidence.length) return;
     const dose = x.level === "모름" ? 3 : 2;
@@ -187,7 +203,7 @@ export async function followGaps(problemId: string, rec: Record_, ask: Ask): Pro
       id: newId("gap"), branch: "algo", kind, layer: LAYER[kind], title: title.slice(0, 80), target: kind === "문법" ? "form" : "ability",
       missed: missed.slice(0, 300), wrong: (x.wrote ?? "").slice(0, 300), ...(m?.code ? { wrongCode: m.code } : {}), wrongVerified: false,
       kernel: { lang, code: "", needs: [] }, evidence, origin: { problemId, title: rec.title, lang }, topic: `${kind}.${title}`.slice(0, 60),
-      scope: kind === "문법" ? "line" : "piece", dose: { level: dose as 2 | 3 }, state, createdAt: now() } });
+      scope: kind === "문법" ? "line" : "piece", dose: { level: dose as 2 | 3 }, state, createdAt: now(), ...(unit ? { unit } : {}) } });
   };
   for (const x of reply.items ?? []) {
     if (x.kind === "발상") add("알고리즘 구현", x.item, x.missing, x);
