@@ -150,6 +150,10 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
   /** A problem made before from the same address: open it, or make a new one anyway. */
   const [existing, setExisting] = useState<{ id: string; title: string; createdAt: string; count: number; from: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  /** 글을 못 읽었을 때(막힌 페이지 · 사본 없음): 이유와 함께 "비슷한 문제 가져오기 / 캡처나 글 넣기" 중 고르게(11/16 사용자). */
+  const [unread, setUnread] = useState<{ reason: string; from: string; hint: string } | null>(null);
+  const [ask, setAsk] = useState("");
   // 진행 상황(11/16 사용자 "가져오는 과정 뭐하고 있는지 보이게"): 보낼 때 job 하나를 정하고, 서버가 쌓는 단계를 짧게 물어 읽는다.
   const [job, setJob] = useState("");
   const [steps, setSteps] = useState<Array<{ sec: number; text: string }>>([]);
@@ -172,37 +176,40 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
     setError("");
     try { setImage(await shrinkImage(file)); } catch (e) { setError(errorText(e)); }
   };
-  const make = async (args: { from?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; again?: boolean; job?: string }) => {
-    setBusy("make"); setError(""); setExisting(null);
+  const make = async (args: { from?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; again?: boolean; job?: string; hint?: string }) => {
+    setBusy("make"); setError(""); setExisting(null); setUnread(null);
     try {
       const lang = args.kind === "blank" ? args.lang ?? storedLang() : undefined;
-      const made = await call<{ problem?: { id: string }; existing?: { id: string; title: string; createdAt: string; count: number } }>("/api/code/make",
+      const made = await call<{ problem?: { id: string }; existing?: { id: string; title: string; createdAt: string; count: number }; unreadable?: { reason: string; from: string } }>("/api/code/make",
         { job: args.job ?? jobRef(), ...(args.from ? { from: args.from } : {}), ...(args.lesson ? { lesson: args.lesson } : {}), kind: args.kind, ...(lang ? { lang } : {}), ...(args.again ? { again: true } : {}) });
-      if (made.existing) setExisting({ ...made.existing, from: args.from ?? "" }); else if (made.problem) done(made.problem.id);
+      if (made.unreadable) setUnread({ ...made.unreadable, hint: args.hint || made.unreadable.from });
+      else if (made.existing) setExisting({ ...made.existing, from: args.from ?? "" }); else if (made.problem) done(made.problem.id);
     } catch (e) { setError(errorText(e)); } finally { setBusy(""); }
   };
-  const send = async () => {
+  const send = async (override?: string) => {
     if (busy) return;
+    const text_ = override ?? text;
+    setUnread(null); setAsk("");
     const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     setJob(id); setSteps([]); startedAt.current = Date.now();
     setBusy("route"); setError(""); setPlan(null); setExisting(null);
     let got: Intake | null = null;
-    try { got = await call<Intake>("/api/code/intake", { job: id, text, ...(image ? { image } : {}) }); setPlan(got); }
+    try { got = await call<Intake>("/api/code/intake", { job: id, text: text_, ...(image ? { image } : {}) }); setPlan(got); }
     catch (e) { setError(errorText(e)); }
     finally { setBusy(""); }
     if (!got || got.route === "find") return;
-    await make({ job: id, ...(got.from ? { from: got.from } : {}), ...(got.lesson ? { lesson: got.lesson } : {}), kind: got.kind, ...(got.lang ? { lang: got.lang } : {}) });
+    await make({ job: id, hint: text_.trim().slice(0, 200), ...(got.from ? { from: got.from } : {}), ...(got.lesson ? { lesson: got.lesson } : {}), kind: got.kind, ...(got.lang ? { lang: got.lang } : {}) });
   };
   /** 같은 진행 목록에 이어 적는다(보내기 → 만들기). 후보를 고를 때처럼 새로 시작하면 새 job. */
   function jobRef() { if (job) return job; const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; setJob(id); startedAt.current = Date.now(); return id; }
-  const pick = async (c: Found) => { setPicking(c.url); await make({ from: c.number && /acmicpc\.net/.test(c.url) ? c.number : c.url, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); setPicking(""); };
+  const pick = async (c: Found) => { setPicking(c.url); await make({ hint: [c.title, c.site, c.level, c.pattern].filter(Boolean).join(" · "), from: c.number && /acmicpc\.net/.test(c.url) ? c.number : c.url, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); setPicking(""); };
   const working = busy === "route" ? (image ? "캡처를 읽는 중… (10~30초)" : "무엇을 할지 보는 중… (5~30초)")
     : busy === "make" ? (plan?.route === "named" ? "문제를 가져오는 중… (백준 문제는 몇 초면 열려요)" : "문제를 만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "";
   return (
     <section className="panel stack">
       <b>문제 가져오기</b>
       <p className="small muted">한 칸에 적어요. 백준 번호 · 문제 이름이면 그 문제를, 문제 글을 붙여 넣거나 캡처를 넣으면 그걸로, 풀고 싶은 걸 말하면(비워도 돼요) 지금 수준에 맞는 문제를 찾아 와요. &quot;빈칸으로&quot;, &quot;C++로&quot;처럼 덧붙여도 돼요.</p>
-      <textarea className="ws-input" rows={text.includes("\n") ? 6 : 2} value={text} onChange={(e) => setText(e.target.value)}
+      <textarea ref={boxRef} className="ws-input" rows={text.includes("\n") ? 6 : 2} value={text} onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !text.includes("\n")) { e.preventDefault(); void send(); } }}
         onPaste={(e) => { const f = [...e.clipboardData.items].find((i) => i.type.startsWith("image/"))?.getAsFile(); if (f) { e.preventDefault(); void takeImage(f); } }}
         onDragOver={(e) => e.preventDefault()} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) { e.preventDefault(); void takeImage(f); } }}
@@ -231,6 +238,15 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
             <button className="btn small" disabled={Boolean(picking) || Boolean(busy)} onClick={() => void pick(c)}>{picking === c.url ? "가져오는 중…" : "이걸로 풀기"}</button>
           </li>))}
         </ul>) : <p className="small muted">새로 고를 만한 문제를 못 찾았어요. 말을 조금 바꿔서 다시 보내 봐요.</p>) : null}
+      {unread ? (
+        <div className="stack small" style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+          <span>{unread.reason} 문제 글을 못 읽었어요. 어떻게 할까요?</span>
+          <div className="row">
+            <button className="btn primary small" disabled={Boolean(busy)} onClick={() => void send(`이 문제와 비슷한 문제를 찾아 줘: ${unread.hint}. 못 읽은 주소(${unread.from})와 같은 사이트 말고, 백준 문제로.`)}>비슷한 문제 가져오기</button>
+            <button className="btn small" disabled={Boolean(busy)} onClick={() => { setUnread(null); setText(""); setPlan(null); setAsk("그 문제를 캡처해서 여기에 Ctrl+V(또는 [캡처 넣기]) 하거나, 문제 글을 복사해 붙여 넣고 보내 주세요."); boxRef.current?.focus(); }}>캡처나 글 넣기</button>
+          </div>
+        </div>) : null}
+      {ask ? <p className="small">{ask}</p> : null}
       {existing ? (
         <div className="row small">
           <span>이미 가져온 문제예요: <b>{existing.title}</b> ({existing.createdAt.slice(5, 10).replace("-", "/")}{existing.count > 1 ? ` 외 ${existing.count - 1}개` : ""})</span>

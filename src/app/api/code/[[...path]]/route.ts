@@ -16,7 +16,7 @@ import { keepTalk } from "@/lib/code/tutor/talk";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
-import { resolveSource, type Resolved } from "@/lib/code/source";
+import { resolveSource, UnreadableSource, type Resolved } from "@/lib/code/source";
 import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
 import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
@@ -158,7 +158,9 @@ async function inner(request: Request, context: RouteContext) {
         wait: z.boolean().optional(), job: z.string().regex(jobId).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
       const { from, again, wait, job, ...rest } = b;
       return json(await withProgress(job, async () => {
-      const got = from?.trim() ? await resolveSource(from) : null;
+      let got: Awaited<ReturnType<typeof resolveSource>> | null = null;
+      try { got = from?.trim() ? await resolveSource(from) : null; }
+      catch (e) { if (e instanceof UnreadableSource) { note(`글을 못 읽었어요: ${e.reason}`); return { unreadable: { reason: e.reason, from: from!.trim() } }; } throw e; }
       const existing = got && !again ? await findBySource(got.url, rest.kind) : null;
       if (existing) { note("이미 가져온 문제가 있어요"); return { existing }; }
       // 바로 열기: an imported original is shown at once (read it, run the examples); the hidden tests follow in the background.

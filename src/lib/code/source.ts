@@ -57,6 +57,16 @@ export const lessonOf = (o: Original, number: string) => [`[받아 온 문제] B
   ...o.examples.flatMap((ex, i) => [`예제 입력 ${i + 1}\n${ex.input}`, `예제 출력 ${i + 1}\n${ex.output}`])].join("\n\n");
 
 /** An address or a Baekjoon number → the text to make a problem from. Refused (422) with a reason a learner can act on. */
+/** 글을 못 읽음(막힌 페이지 · 사본 없음): 화면이 "비슷한 문제 가져오기 / 캡처나 글 넣기"를 묻는다(11/16 사용자). reason은 짧은 이유. */
+export class UnreadableSource extends CodeError {
+  reason: string;
+  constructor(reason: string, message: string) { super(422, message); this.reason = reason; }
+}
+
+/** 이유를 이어지는 말로: "페이지를 열지 못했어요 (fetch failed)" → "페이지가 열리지 않고" */
+const whyShort = (why: string) => /캡차|로그인/.test(why) ? "캡차나 로그인 화면이 나오고" : /삭제|없는 글/.test(why) ? "삭제됐거나 없는 글이고"
+  : /거의 없어요/.test(why) ? "페이지에 글이 거의 없고(스크립트로만 그리는 페이지)" : "페이지가 열리지 않고";
+
 export async function resolveSource(input: string, fetcher: Fetcher = fetch): Promise<Resolved> {
   const text = input.trim();
   const boj = /^(\d{3,6})$/.exec(text)?.[1] ?? /acmicpc\.net\/problem\/(\d{3,6})\b/.exec(text)?.[1];
@@ -64,7 +74,7 @@ export async function resolveSource(input: string, fetcher: Fetcher = fetch): Pr
     note(`백준 ${boj}번 원문을 인터넷 아카이브에서 찾고 있어요`);
     const original = await archivedBojProblem(boj, fetcher).catch(() => null);
     if (original) note(`원문을 찾았어요: ${original.title}`);
-    if (!original) throw new CodeError(422, `백준 ${boj}번 원문을 인터넷 아카이브에서 찾지 못했어요. 그 문제를 푼 블로그 주소를 넣거나 문제 글을 붙여 넣어 주세요.`);
+    if (!original) throw new UnreadableSource(`인터넷 아카이브에 백준 ${boj}번 원문 사본이 없어서`, `백준 ${boj}번 원문을 인터넷 아카이브에서 찾지 못했어요. 그 문제를 푼 블로그 주소를 넣거나 문제 글을 붙여 넣어 주세요.`);
     return { lesson: lessonOf(original, boj), title: `BOJ ${boj} ${original.title}`, url: original.url, via: "boj-archive", boj, original };
   }
   if (!/^https?:\/\//i.test(text)) throw new CodeError(400, "http(s)로 시작하는 주소나 백준 문제 번호를 넣어 주세요.");
@@ -77,7 +87,7 @@ export async function resolveSource(input: string, fetcher: Fetcher = fetch): Pr
     note("페이지가 안 열려서 인터넷 아카이브 사본을 찾고 있어요");
     const copy = await archivedUrl(text, fetcher).catch(() => null);
     const archived = copy ? await fetchPage(copy, fetcher).catch(() => null) : null;
-    if (!archived || unusable(archived)) throw new CodeError(422, `${why}. 인터넷 아카이브 사본도 없어서 가져오지 못했어요. 글을 복사해서 붙여 넣어 주세요.`);
+    if (!archived || unusable(archived)) throw new UnreadableSource(`${whyShort(why)} 인터넷 아카이브 사본도 없어서`, `${why}. 인터넷 아카이브 사본도 없어서 가져오지 못했어요. 글을 복사해서 붙여 넣어 주세요.`);
     page = { ...archived, url: text }; via = "page-archive";
   }
   // A page about one Baekjoon problem: the archived original is the answer key, when there is one.
