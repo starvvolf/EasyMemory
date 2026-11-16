@@ -82,3 +82,31 @@ pre.bad, .sc-err { color: var(--bad); }
 @keyframes sc-pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes sc-bar { from { width: 100%; } to { width: 0; } }
 @media (prefers-reduced-motion: reduce) { .sc-toast, .sc-toast-check, .sc-dots i { animation: none; } .sc-toast-bar { display: none; } }
+
+/* 실습 다시 보기(11/16): 목차 카드 + 개념 카드. 글은 넉넉한 줄 간격, 칸마다 색으로 구분 */
+.pn { display: flex; flex-direction: column; gap: 14px; }
+.pn-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 2px 2px 0; }
+.pn-made { margin: 2px 0 0; font-size: 19px; font-weight: 800; line-height: 1.35; color: var(--ink); }
+.pn-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
+.pn-wait { color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.pn-wait p { margin: 0; }
+.pn-toc { background: var(--surface-2); box-shadow: none; padding: 14px 18px; }
+.pn-toclab { margin: 0 0 8px; font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .03em; }
+.pn-toc ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 14px; }
+.pn-toc button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 5px 4px; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.pn-toc button:hover { background: var(--surface); color: var(--accent); }
+.pn-num { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 14px; font-weight: 800; }
+.pn-num.sm { width: 22px; height: 22px; font-size: 12px; background: var(--accent-soft); color: var(--accent); }
+.pn-lesson { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 16px; }
+.pn-lhead { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.pn-lhead h4 { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.4; color: var(--ink); }
+.pn-concept { margin: 0; font-size: 15.5px; line-height: 1.75; color: var(--ink); font-weight: 500; }
+.pn-lab { margin: 0 0 4px; font-size: 11.5px; font-weight: 800; letter-spacing: .04em; color: var(--muted); }
+.pn-body { margin: 0; font-size: 14.5px; line-height: 1.8; color: var(--ink); }
+.pn-part { padding-left: 2px; }
+.pn-here { padding: 12px 14px; border-radius: 10px; background: var(--read-soft); }
+.pn-here .pn-lab { color: var(--read); }
+.pn-keep { padding: 11px 14px; border-radius: 10px; background: var(--accent-soft); border-left: 4px solid var(--accent); }
+.pn-keep .pn-lab { color: var(--accent); }
+.pn-keep p:last-child { margin: 0; font-size: 14.5px; font-weight: 700; line-height: 1.6; color: var(--ink); }
+.pn-at { margin: 0; text-align: right; }

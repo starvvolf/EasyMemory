@@ -26,22 +26,28 @@ export function PracticeNotes({ runId }: { runId: string }) {
   useEffect(() => { if (!busy) return; const t0 = Date.now(); const t = setInterval(() => setSec(Math.round((Date.now() - t0) / 1000)), 1000); return () => clearInterval(t); }, [busy]);
   useEffect(() => { if (n !== null || tried || busy) return; const t = setTimeout(() => { setTried(true); void make(); }, 0); return () => clearTimeout(t); });
   const notes = n?.notes;
-  return <section className="sc-gaps">
-    <header className="sc-gapshead"><span className="rv-eyebrow">실습 다시 보기</span><h3 className="rv-title">{notes?.made || "배운 것 정리"}</h3><span className="cs-gap" />
-      {n !== undefined && !busy ? <button className="btn small" onClick={() => void make()}>{notes ? "다시 정리 (AI 1번)" : "배운 것 정리하기 (AI 1번)"}</button> : null}</header>
-    {busy ? <div className="sc-card sc-making"><p><span className="sc-dots" aria-hidden="true"><i /><i /><i /></span> 실습 기록을 처음부터 따라가며 배운 개념을 정리하는 중</p>
-      <p className="small muted">{sec}초째 · 보통 1분 안팎이에요.</p></div> : null}
+  const go = (i: number) => document.getElementById(`pn-${runId}-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // 11/16 사용자: 가독성 좋게, 깔끔하게, 구분감 있게 — 목차 카드 하나 + 개념마다 카드 하나(무엇인가 → 원리 → 이 실습에서는 → 기억할 것)
+  return <section className="pn">
+    <header className="pn-head">
+      <div><span className="rv-eyebrow">실습 다시 보기</span><h3 className="pn-made">{notes?.made || "배운 것 정리"}</h3></div>
+      {n !== undefined && !busy ? <button className="btn small" onClick={() => void make()}>{notes ? "다시 정리 (AI 1번)" : "배운 것 정리하기 (AI 1번)"}</button> : null}
+    </header>
+    {busy ? <div className="pn-card pn-wait"><p><span className="sc-dots" aria-hidden="true"><i /><i /><i /></span> 실습 기록을 처음부터 따라가며 배운 개념을 정리하는 중</p>
+      <p className="small muted">{sec}초째 · 보통 1분 안팎이에요. 다른 화면에 다녀와도 이어서 만들어요.</p></div> : null}
     {err ? <p className="small bad">{err}</p> : null}
     {notes && !busy ? <>
-      {/* 11/16 사용자: 어렵게 가지 말고 배운 개념 · 원리를 강의식으로 담백하게 — 코드 조각은 앞뒤 없이 보면 알기 어려워 뺌 */}
-      <ol className="sc-steps">{notes.lessons.map((x, i) => <li key={i} className="sc-card">
-        <p className="rv-eyebrow">{i + 1}강</p>
-        <h4>{x.title}</h4>
-        {x.concept ? <p>{x.concept}</p> : null}
-        {x.principle ? <p>{x.principle}</p> : null}
-        {x.inPractice ? <p className="small"><b>이 실습에서는</b> {x.inPractice}</p> : null}
-        {x.remember ? <p className="small"><b>기억할 것</b> {x.remember}</p> : null}
-      </li>)}</ol>
-      <p className="small muted">정리한 때 {new Date(n!.at).toLocaleString("ko-KR")}</p></> : null}
+      <nav className="pn-card pn-toc" aria-label="배운 것 목차">
+        <p className="pn-toclab">이번 실습에서 배운 것 {notes.lessons.length}가지</p>
+        <ol>{notes.lessons.map((x, i) => <li key={i}><button type="button" onClick={() => go(i)}><span className="pn-num sm">{i + 1}</span>{x.title}</button></li>)}</ol>
+      </nav>
+      {notes.lessons.map((x, i) => <article key={i} id={`pn-${runId}-${i}`} className="pn-card pn-lesson">
+        <header className="pn-lhead"><span className="pn-num">{i + 1}</span><h4>{x.title}</h4></header>
+        {x.concept ? <p className="pn-concept">{x.concept}</p> : null}
+        {x.principle ? <div className="pn-part"><p className="pn-lab">원리</p><p className="pn-body">{x.principle}</p></div> : null}
+        {x.inPractice ? <div className="pn-here"><p className="pn-lab">이 실습에서는</p><p className="pn-body">{x.inPractice}</p></div> : null}
+        {x.remember ? <div className="pn-keep"><p className="pn-lab">기억할 것</p><p>{x.remember}</p></div> : null}
+      </article>)}
+      <p className="small muted pn-at">정리한 때 {new Date(n!.at).toLocaleString("ko-KR")}</p></> : null}
   </section>;
 }
