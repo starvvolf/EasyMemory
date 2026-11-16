@@ -36,3 +36,12 @@ test("찾기: 이미 있는 번호는 코드가 거른다", () => {
   const out = settle(r({ route: "find", candidates: [{ title: "A", number: "1000", url: "", site: "", why: "", level: "", pattern: "" }, { title: "B", number: "2178", url: "", site: "", why: "", level: "", pattern: "" }] }), { text: "BFS 쉬운 거" }, new Set(["1000"]));
   assert.deepEqual(out.candidates?.map((x) => x.title), ["B"]);
 });
+
+test("다른 사이트 문제의 번호를 백준 번호로 쓰지 않는다 (SWEA 2068 → 백준 2068로 바뀌던 것)", () => {
+  const out = settle(r({ route: "find", candidates: [
+    { title: "최대수 구하기", number: "2068", url: "https://swexpertacademy.com/main/code/problem/problemDetail.do?contestProbId=AV5QQhbqA4QDFAUq", site: "SW Expert Academy", why: "", level: "D1", pattern: "" },
+    { title: "DFS와 BFS", number: "1260", url: "https://www.acmicpc.net/problem/1260", site: "백준", why: "", level: "", pattern: "" },
+    { title: "A+B", number: "1000", url: "", site: "백준", why: "", level: "", pattern: "" },
+  ] }), { text: "삼성 SW 아카데미 D1 문제" }, new Set(["2068"]));
+  assert.deepEqual(out.candidates?.map((c) => [c.number, c.url.slice(0, 30)]), [["", "https://swexpertacademy.com/ma"], ["1260", "https://www.acmicpc.net/proble"], ["1000", "https://www.acmicpc.net/proble"]]);
+});
