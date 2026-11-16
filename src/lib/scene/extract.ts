@@ -7,7 +7,7 @@ import { langOf, runAll } from "./exec.ts";
 import { doseOf, firstState, scopeOf } from "./ladder.ts";
 import { EXTRACT_SCHEMA, EXTRACT_SYSTEM, type ExtractReply } from "./prompts.ts";
 import { changeGaps, newId, readGaps } from "./store.ts";
-import { GAP_KINDS, LAYER, type Evidence, type Gap, type GapKind } from "./types.ts";
+import { GAP_KINDS, LAYER, STATEMENT_CAP, type Evidence, type Gap, type GapKind } from "./types.ts";
 
 export type Ask = <T>(purpose: string, system: string, user: string, schema: Record<string, unknown>) => Promise<T>;
 export const defaultAsk: Ask = (purpose, system, user, schema) => askJson(purpose, system, user, schema, { model: "gpt-6.1-terra", effort: "medium" });
@@ -44,7 +44,7 @@ async function firstFail(rec: Record_, sub: Submission) {
 }
 
 export async function extractUser(rec: Record_) {
-  const lines = [`[문제] ${rec.title}\n${rec.statement.slice(0, 1500)}`];
+  const lines = [`[문제] ${rec.title}\n${rec.statement.slice(0, STATEMENT_CAP)}`];
   if (rec.talk.length) lines.push(`[대화] 시간 순서. 학습자가 묻고 AI(튜터)가 답한 것.\n${rec.talk.map((t) => `- ${t.at} (${t.kind}${t.verdict ? `, 그때 채점 ${t.verdict}` : ""})\n  학습자: ${t.q.slice(0, 500)}\n  AI: ${t.a.slice(0, 700)}`).join("\n")}`);
   const subs: string[] = [];
   for (const s of rec.subs.slice(-8)) {

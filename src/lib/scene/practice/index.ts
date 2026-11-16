@@ -6,6 +6,7 @@
 //   12 왜인지 한 줄 = 실습 "다시 확인" 문항(실습 서버 /api/rechecks) 그대로.
 import type { Ask } from "../extract.ts";
 import { checkScene } from "../check.ts";
+import { STATEMENT_CAP } from "../types.ts";
 import type { Graded } from "../grade.ts";
 import { newId } from "../store.ts";
 import type { Format, Gap, Scene } from "../types.ts";
@@ -49,7 +50,7 @@ async function userOf(gap: Gap, format: Format) {
   return [`[빈틈] ${gap.title} (종류 ${gap.kind}, 확인할 것 ${gap.target === "form" ? "표현(form)" : "능력(ability)"})`, `떠올렸어야 할 생각: ${gap.missed}`,
     gap.wrong ? `그때 생각(mine): ${gap.wrong}` : "그때 생각: 아무것도 못 떠올림 (mine은 가장 그럴듯한 빠뜨림으로)",
     gap.kernel.code ? `맞는 생각이 담긴 코드:\n${gap.kernel.code}${gap.kernel.needs.length ? `\n(가정: ${gap.kernel.needs.join(", ")})` : ""}` : "",
-    `[원래 실습] ${m.title}\n${m.statement.slice(0, 1800)}`, `[만들 장면] format=${format}, distance=${gap.state.distance}, lang=${gap.origin.lang}`].filter(Boolean).join("\n\n");
+    `[원래 실습] ${m.title}\n${m.statement.slice(0, STATEMENT_CAP)}`, `[만들 장면] format=${format}, distance=${gap.state.distance}, lang=${gap.origin.lang}`].filter(Boolean).join("\n\n");
 }
 /** AI 1번(검사에서 떨어지면 걸린 것을 붙여 한 번 더) */
 async function withAi<R>(gap: Gap, format: Format, ask: Ask, system: string, schema: Record<string, unknown>, build: (r: R) => Scene, check: (s: Scene) => Promise<Scene>) {

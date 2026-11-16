@@ -97,3 +97,6 @@ export type GapMark = { at: string; kind: "known" | "doubt"; note?: string };
 export const VERDICT_LABEL: Record<SceneVerdict, string> = { pass: "통과", same: "같은 실수", other: "다른 실수", unclear: "원인 미확정" };
 export type Attempt = { id: string; at: string; sceneId: string; gapId: string; distance: Distance; format: Format; answer: string; verdict: SceneVerdict;
   hinted: boolean; gaveUp: boolean; outputs?: string[]; matched?: string; firstDiff?: { index: number; expected: string; got: string } };
+
+/** 문제 · 실습 글은 자르지 않고 보낸다(11/16 사용자 결정). 비정상적으로 긴 글만 막는 넉넉한 상한. */
+export const STATEMENT_CAP = 20_000;

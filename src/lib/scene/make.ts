@@ -10,7 +10,7 @@ import { makePracticeScene, practiceFormats, practiceMaterial } from "./practice
 import { PRACTICE_MADE } from "./practice/formats.ts";
 import { MIX_NOTE, SCENE_SCHEMA, SCENE_SYSTEM, type SceneReply } from "./prompts.ts";
 import { bankScene, newId, readAttempts, readGaps, saveScene } from "./store.ts";
-import { DISTANCE_LABEL, FORMAT_LABEL, PRACTICE_FORMATS, type Format, type Gap, type Scene } from "./types.ts";
+import { DISTANCE_LABEL, FORMAT_LABEL, PRACTICE_FORMATS, STATEMENT_CAP, type Format, type Gap, type Scene } from "./types.ts";
 
 /** 장면 지시문에 넣을 원래 상황(알고리즘 문제 또는 실습 목표) */
 export type Material = { title: string; statement: string; lang: string };
@@ -82,7 +82,7 @@ export function sceneUser(gap: Gap, format: Format, rec: Pick<Material, "title" 
   const gaps = extra.mix?.length ? extra.mix : [gap];
   return [
     gaps.length > 1 ? `${MIX_NOTE}\n\n${gaps.map(one).join("\n\n")}` : one(gap),
-    `[원래 ${gap.branch === "practice" ? "실습" : "문제"}] ${rec.title}: ${rec.statement.slice(0, 600)}`,
+    `[원래 ${gap.branch === "practice" ? "실습" : "문제"}] ${rec.title}: ${rec.statement.slice(0, STATEMENT_CAP)}`,
     extra.collected?.length ? `[학습자가 실제로 낸 틀린 답(원인 미확정) — 이 생각들도 wrongs에]\n${extra.collected.map((c, i) => `${i + 1}. ${c.slice(0, 400)}`).join("\n")}` : "",
     `[만들 장면] format=${format} (${FORMAT_LABEL[format]}), distance=${gap.state.distance} (${DISTANCE_LABEL[gap.state.distance]}), scope=${gap.scope}, lang=${rec.lang ?? gap.origin.lang}`,
   ].filter(Boolean).join("\n\n");
