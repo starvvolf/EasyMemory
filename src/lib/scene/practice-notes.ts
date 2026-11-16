@@ -101,10 +101,10 @@ export async function readNotes(runId: string): Promise<{ at: string; notes: Not
 }
 const defaultAsk: NotesAsk = (system, user, schema) => askJson<Notes>("practice:notes", system, user, schema, { model: "gpt-6.1-terra", effort: "medium" });
 /** 실습 한 판을 정리한다(AI 1번). 다시 하면 덮어쓴다. */
-export async function makeNotes(runId: string, ask: NotesAsk = defaultAsk) {
-  const lib = await course<{ online?: boolean; run?: { title?: string }; title?: string; scenes?: Chapter[] }>(`runs/${encodeURIComponent(runId)}/library`, { timeout: 15000 });
+export async function makeNotes(runId: string, ask: NotesAsk = defaultAsk, given?: { title?: string; scenes?: Chapter[] }) {
+  const lib = given ?? await course<{ online?: boolean; run?: { title?: string }; title?: string; scenes?: Chapter[] }>(`runs/${encodeURIComponent(runId)}/library`, { timeout: 15000 });
   const chapters = lib.scenes ?? [];
-  const { text, count } = notesUser(lib.run?.title ?? lib.title ?? "실습", chapters);
+  const { text, count } = notesUser(lib.title || "실습", chapters);
   if (!count) throw Object.assign(new Error("이 실습에는 아직 정리할 기록이 없어요."), { status: 400 });
   const notes = cleanNotes(await ask(NOTES_SYSTEM, text, NOTES_SCHEMA), text);
   await rememberCards(notes, lib.title || "실습", runId);
