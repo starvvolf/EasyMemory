@@ -1,7 +1,7 @@
 // 주소로 문제 가져오기: a fake network — the archive, a Baekjoon original, blog pages — and what reaches the problem maker.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bojNumberOf, readableUrl, resolveSource } from "./source.ts";
+import { UnreadableSource, bojNumberOf, readableUrl, resolveSource } from "./source.ts";
 
 const BOJ = (n: string) => `<html><head><title>${n}번: 회사에 있는 사람</title></head><body><span id="problem_title">회사에 있는 사람</span>
 <div id="problem_description"><p>출입 기록이 주어질 때 회사에 남아 있는 사람을 구하라. 1 ≤ n ≤ 10<sup>6</sup></p></div>
@@ -74,6 +74,9 @@ test("a blocked or empty page is tried once from the archive; with no copy, the 
   await assert.rejects(resolveSource(post, none.fetcher), /글이 거의 없어요.*붙여 넣어 주세요/);
   await assert.rejects(resolveSource("hello", none.fetcher), /주소나 백준 문제 번호/);
   await assert.rejects(resolveSource("99999", none.fetcher), /99999번 원문을 인터넷 아카이브에서 찾지 못했어요/);
+  // 화면이 "비슷한 문제 가져오기 / 캡처나 글 넣기"를 물을 수 있게 짧은 이유를 따로 준다(11/16)
+  await assert.rejects(resolveSource(post, none.fetcher), (e: unknown) => e instanceof UnreadableSource && /^페이지에 글이 거의 없고.*사본도 없어서$/.test(e.reason));
+  await assert.rejects(resolveSource("99999", none.fetcher), (e: unknown) => e instanceof UnreadableSource && /백준 99999번 원문 사본이 없어서$/.test(e.reason));
 });
 
 test("addresses that read better in another form, and how a page names its problem", () => {
