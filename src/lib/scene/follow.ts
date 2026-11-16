@@ -160,6 +160,15 @@ async function ideaScene1(gap: Gap, origin: string, stuck: { code: string; hint:
   return null;
 }
 
+/* ---------------- 지금 무엇을 하는지(화면의 "…" 옆 글, 11/16) ---------------- */
+const stages = new Map<string, { text: string; started: number; at: number }>();
+const stage = (problemId: string, text: string) => { const o = stages.get(problemId); stages.set(problemId, { text, started: o?.started ?? Date.now(), at: Date.now() }); };
+/** 빈틈 찾기 진행: 없거나 끝났으면 null */
+export function followProgress(problemId: string) {
+  const s = stages.get(problemId);
+  return s ? { text: s.text, seconds: Math.round((Date.now() - s.started) / 1000) } : null;
+}
+
 /* ---------------- 빈틈으로 ---------------- */
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -171,6 +180,11 @@ const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(proc
 export async function followGaps(problemId: string, rec: Record_, ask: Ask): Promise<Gap[]> {
   const lang = rec.subs.at(-1)?.lang ?? "python";
   const moments = momentsOf(rec);
+  stages.delete(problemId);
+  stage(problemId, `풀이 기록(순간 ${moments.length}개)을 처음부터 따라가며 막힌 곳과 목차를 정리하는 중`);
+  try { return await followGapsIn(problemId, rec, ask, lang, moments); } finally { stages.delete(problemId); }
+}
+async function followGapsIn(problemId: string, rec: Record_, ask: Ask, lang: string, moments: Moment[]): Promise<Gap[]> {
   const reply = await ask<FollowReply>("scene:follow", FOLLOW_SYSTEM, followUser(rec, moments), FOLLOW_SCHEMA);
   await mkdir(path.join(dataDir(), "scene", "follow"), { recursive: true });
   await writeFile(path.join(dataDir(), "scene", "follow", `${problemId}.json`), JSON.stringify({ at: now(), problemId, reply }, null, 1), "utf8");
@@ -214,10 +228,16 @@ export async function followGaps(problemId: string, rec: Record_, ask: Ask): Pro
   // 장면: 기본기는 한 번에, 발상은 하나씩 동시에
   const basics = made.filter((x) => x.gap.kind === "문법").map((x) => x.gap);
   const ideas = made.filter((x) => x.gap.kind !== "문법");
+  const total = ideas.length + (basics.length ? 1 : 0);
+  let done = 0;
+  const tick = () => stage(problemId, `다시 물을 문제를 만들고 코드로 확인하는 중 (${done}/${total} · 기본기 ${basics.length}개는 한 번에, 발상 ${ideas.length}개는 하나씩 동시에)`);
+  tick();
+  const counted = <T,>(p: Promise<T>) => p.finally(() => { done++; tick(); });
   const [basicMade, ideaMade] = await Promise.all([
-    basics.length ? basicScenes(basics, lang, ask) : Promise.resolve(new Map<string, Scene>()),
-    Promise.all(ideas.map((x) => ideaScene1(x.gap, rec.title, x.stuck, lang, ask).then((s) => [x.gap.id, s] as const))),
+    basics.length ? counted(basicScenes(basics, lang, ask)) : Promise.resolve(new Map<string, Scene>()),
+    Promise.all(ideas.map((x) => counted(ideaScene1(x.gap, rec.title, x.stuck, lang, ask)).then((s) => [x.gap.id, s] as const))),
   ]);
+  stage(problemId, "저장하는 중");
   const scenes = new Map<string, Scene>([...basicMade, ...ideaMade.flatMap(([id, s]) => (s ? [[id, s] as const] : []))]);
   for (const s of scenes.values()) await saveScene(s);
   for (const { gap } of made) if (scenes.has(gap.id)) gap.wrongVerified = true; // 그때 쓴 모양이 새 장면에서 실제로 틀림(검사 통과)

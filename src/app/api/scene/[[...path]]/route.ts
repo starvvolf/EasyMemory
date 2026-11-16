@@ -2,6 +2,7 @@
 //   GET  /api/scene/today              오늘 볼 빈틈(낮은 층부터, 약 10분)
 //   GET  /api/scene/gaps?problem=<id>  한 풀이의 빈틈
 //   GET  /api/scene/follow?problem=<id> 생각 따라가기 결과(생각 묶음 · 순서 · 흐름, 11/16)
+//   GET  /api/scene/progress?problem=<id> 놓친 생각 찾기가 지금 무엇을 하는지
 //   POST /api/scene/extract {problemId, force?}   풀이 기록 → 빈틈 (AI 1번)
 //   POST /api/scene/next {gapId}                  그 빈틈의 다음 장면 (똑같이 = AI 0번, 비슷하게 · 응용 = AI 1번)
 //   POST /api/scene/run {sceneId, answer}         보이는 입력에서만 미리 실행
@@ -17,7 +18,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, responseError } from "@/lib/http";
-import { readFollow } from "@/lib/scene/follow";
+import { followProgress, readFollow } from "@/lib/scene/follow";
 import { answer, extract, gapsOf, gapsOfRun, mark, next, prefetch, preview, progress, thenView, today, tutorLink, why, whyQuestion } from "@/lib/scene/service";
 
 export const runtime = "nodejs";
@@ -36,6 +37,7 @@ export async function GET(request: Request, context: Context) {
     if (p === "gaps") return NextResponse.json({ gaps: await gapsOf(z.string().regex(/^cp_[a-z0-9_-]{3,40}$/).parse(q.get("problem"))) });
     if (p === "then") return NextResponse.json(await thenView(gapId.parse(q.get("gap"))));
     if (p === "tutor") return NextResponse.json(await tutorLink(gapId.parse(q.get("gap"))));
+    if (p === "progress" && q.get("problem")) return NextResponse.json({ progress: followProgress(z.string().regex(/^cp_[a-z0-9_-]{3,40}$/).parse(q.get("problem"))) });
     if (p === "progress") return NextResponse.json({ progress: progress(gapId.parse(q.get("gap"))) });
     return NextResponse.json({ message: "경로를 찾을 수 없어요." }, { status: 404 });
   } catch (error) { return fail(error); }

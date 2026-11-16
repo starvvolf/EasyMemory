@@ -62,6 +62,23 @@ function Making({ gapId }: { gapId: string }) {
   </div>;
 }
 
+/** 놓친 생각 찾기 동안: 서버가 지금 하는 일 + 움직이는 점 + 초(11/16) */
+function Finding({ problemId }: { problemId: string }) {
+  const [p, setP] = useState<{ text: string; seconds: number } | null>(null);
+  const [t0] = useState(() => Date.now());
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const tick = () => { setSec(Math.round((Date.now() - t0) / 1000)); void call<{ progress: { text: string; seconds: number } | null }>(`/api/scene/progress?problem=${encodeURIComponent(problemId)}`).then((r) => { if (alive && r.progress) setP(r.progress); }).catch(() => {}); };
+    const t = setInterval(tick, 1000);
+    return () => { alive = false; clearInterval(t); };
+  }, [problemId, t0]);
+  return <div className="sc-card sc-making">
+    <p><span className="sc-dots" aria-hidden="true"><i /><i /><i /></span> {p?.text ?? "풀이 기록을 읽는 중"}</p>
+    <p className="small muted">{p?.seconds ?? sec}초째 · 보통 1분 30초쯤 걸려요(AI 여러 번). 만든 문제는 코드가 정답 · 오답을 직접 돌려 본 것만 남겨요.</p>
+  </div>;
+}
+
 function CodeBox({ value, onChange, rows = 6, readOnly, mark }: { value: string; onChange?: (v: string) => void; rows?: number; readOnly?: boolean; mark?: [number, number] | null }) {
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== "Tab" || !onChange) return;
@@ -277,36 +294,62 @@ function SceneCard({ gap, scene, onDone }: { gap: GapLite; scene: SceneLite; onD
 }
 
 /** 빈틈 여러 개를 장면 하나씩. 장면은 필요할 때 만든다(똑같이는 AI 없이, 비슷하게 · 응용은 AI 1번 또는 은행). 섞은 장면이면 섞인 빈틈은 건너뛴다. */
-export function SceneSession({ gapIds, pick, onClose }: { gapIds: string[]; pick?: GapLite["distance"]; onClose: (done: number) => void }) {
+export function SceneSession({ gapIds, pick, onClose, gaps, noPrefetch }: { gapIds: string[]; pick?: GapLite["distance"]; onClose: (done: number) => void;
+  /** 목록 · 위 정보에 쓸 빈틈들(있으면) */ gaps?: GapLite[]; /** 풀이 노트에서 바로 카드로 열 때: 남은 장면을 미리 만들지 않음(AI 사용 없이 열기) */ noPrefetch?: boolean }) {
   const [at, setAt] = useState(0);
   const [skip, setSkip] = useState<string[]>([]);
-  const [cur, setCur] = useState<{ gap: GapLite; scene: SceneLite; recommended?: GapLite["distance"] } | null>(null);
+  // 카드마다 받은 장면과 결과(플래시카드처럼 앞뒤로 넘겨도 다시 만들지 않게, 11/16)
+  const [cards, setCards] = useState<Record<string, { gap: GapLite; scene: SceneLite; recommended?: GapLite["distance"] }>>({});
+  const [results, setResults] = useState<Record<string, string>>({});
+  const [listOpen, setListOpen] = useState(false);
   const [err, setErr] = useState("");
   const [tally, setTally] = useState<Record<string, number>>({});
   const id = gapIds[at];
+  const cur = id ? cards[id] : undefined;
+  const info = (gid: string) => cards[gid]?.gap ?? gaps?.find((g) => g.id === gid);
   // 나머지 빈틈의 장면은 뒤에서 미리 만들어 둔다(푸는 동안 다음 장면이 준비되게)
-  useEffect(() => { if (!pick && gapIds.length > 1) void call("/api/scene/prefetch", { gapIds: gapIds.slice(1) }).catch(() => {}); }, [gapIds, pick]);
+  useEffect(() => { if (!pick && !noPrefetch && gapIds.length > 1) void call("/api/scene/prefetch", { gapIds: gapIds.slice(1) }).catch(() => {}); }, [gapIds, pick, noPrefetch]);
   useEffect(() => {
     if (!id) return;
     if (skip.includes(id)) { const t = setTimeout(() => setAt((k) => k + 1), 0); return () => clearTimeout(t); }
+    if (cards[id] || results[id]) return;
     let alive = true;
-    call<{ gap: GapLite; scene: SceneLite; recommended?: GapLite["distance"] }>("/api/scene/next", { gapId: id, ...(pick ? { distance: pick } : {}) }).then((r) => { if (alive) { setCur(r); setErr(""); } })
+    call<{ gap: GapLite; scene: SceneLite; recommended?: GapLite["distance"] }>("/api/scene/next", { gapId: id, ...(pick ? { distance: pick } : {}) })
+      .then((r) => { if (alive) setCards((c) => ({ ...c, [id]: r })); })
       .catch((e) => { if (alive) setErr(errorText(e)); });
     return () => { alive = false; };
-  }, [id, skip, pick]);
+  }, [id, skip, pick, cards, results]);
   // 다 끝나면 잠깐 알림을 띄우고 저절로 목록으로
   useEffect(() => { if (id) return; const t = setTimeout(() => onClose(at), 1800); return () => clearTimeout(t); }, [id, at, onClose]);
   const onDone = useCallback((r: Result) => {
     setTally((t) => ({ ...t, [r.verdict]: (t[r.verdict] ?? 0) + 1 }));
-    setCur((c) => { if (c?.scene.mix?.length) setSkip((s) => [...s, ...c.scene.mix!.filter((g) => g !== c.gap.id)]); return null; });
+    if (id) setResults((x) => ({ ...x, [id]: r.verdict }));
+    const c = id ? cards[id] : undefined;
+    if (c?.scene.mix?.length) setSkip((s) => [...s, ...c.scene.mix!.filter((g) => g !== c.gap.id)]);
     setAt((k) => k + 1);
-  }, []);
+  }, [id, cards]);
+  const VERDICT: Record<string, string> = { pass: "통과", same: "같은 실수", other: "다른 실수", unclear: "미확정" };
   if (!id) return <section className="sc-session done"><div className="sc-toast end" role="status"><span className="sc-toast-check">✓</span><div><b>확인 끝!</b>
-    <p className="small">{Object.entries(tally).map(([k, n]) => `${({ pass: "통과", same: "같은 실수", other: "다른 실수", unclear: "미확정" } as Record<string, string>)[k]} ${n}`).join(" · ") || "확인한 것이 없어요."}</p></div><span className="sc-toast-bar" /></div></section>;
+    <p className="small">{Object.entries(tally).map(([k, n]) => `${VERDICT[k]} ${n}`).join(" · ") || "확인한 것이 없어요."}</p></div><span className="sc-toast-bar" /></div></section>;
+  const g = info(id);
+  const go = (k: number) => { setErr(""); setAt(Math.max(0, Math.min(gapIds.length, k))); };
   return <section className="sc-session">
-    <div className="sc-top"><span className="small muted">확인 {at + 1} / {gapIds.length}{pick ? ` · ${DIST[pick]}로 골라서` : ""}</span><span className="cs-gap" /><button className="btn ghost small" onClick={() => onClose(at)}>그만</button></div>
-    {err ? <div className="sc-card"><p className="small bad">{err}</p><button className="btn small" onClick={() => { setCur(null); setAt((k) => k + 1); }}>건너뛰기</button></div>
-      : cur && cur.gap.id === id ? <>
+    <div className="sc-top">
+      <button className="btn ghost small" disabled={at === 0} onClick={() => go(at - 1)}>‹ 이전</button>
+      <span className="small muted">{at + 1} / {gapIds.length}{pick ? ` · ${DIST[pick]}로 골라서` : ""}</span>
+      <button className="btn ghost small" onClick={() => go(at + 1)}>{at + 1 < gapIds.length ? "다음 ›" : "끝내기 ›"}</button>
+      <span className="cs-gap" />
+      <button className="btn ghost small" onClick={() => setListOpen((v) => !v)}>{listOpen ? "목록 접기" : "목록"}</button>
+      <button className="btn ghost small" onClick={() => onClose(at)}>그만</button></div>
+    {listOpen ? <ol className="sc-gaplist sc-cardlist">{gapIds.map((gid, i) => { const x = info(gid); return <li key={gid} className={i === at ? "now" : ""}>
+      <button className="linkish small" onClick={() => { go(i); setListOpen(false); }}>{i + 1}. {x?.unit ? `${x.unit.part}${x.unit.sub ? ` › ${x.unit.sub}` : ""} · ` : ""}{x?.title ?? "문제"}</button>
+      <span className="small muted"> {results[gid] ? `· ${VERDICT[results[gid]]}` : i === at ? "· 지금" : ""}</span></li>; })}</ol> : null}
+    {/* 문제 위 정보: 어느 파트 · 묶음의, 기본기인지 발상인지(무슨 빈틈인지는 답한 뒤에) */}
+    {g ? <div className="row small sc-where">{g.unit ? <><span className="sc-chip">{g.unit.part}</span>{g.unit.sub ? <span className="sc-chip">{g.unit.sub}</span> : null}</> : null}
+      <span className="muted">{g.kind === "문법" ? "기본기" : "발상"} · {g.origin.title}{g.distance ? ` · ${DIST[g.distance]}` : ""}</span></div> : null}
+    {results[id] ? <div className="sc-card"><p>이 문제는 풀었어요: <b>{VERDICT[results[id]]}</b></p><button className="btn small" onClick={() => go(at + 1)}>다음 문제</button></div>
+      : err ? <div className="sc-card"><p className="small bad">{err}</p><button className="btn small" onClick={() => go(at + 1)}>건너뛰기</button></div>
+      : cur ? <>
         {cur.recommended && cur.recommended !== cur.scene.distance ? <p className="small muted">추천은 {DIST[cur.recommended]}인데 {DIST[cur.scene.distance]}로 골랐어요. 결과는 이 거리에서 한 칸 움직여요.</p> : null}
         <SceneCard key={cur.scene.id} gap={cur.gap} scene={cur.scene} onDone={onDone} /></>
       : <Making gapId={id} />}
@@ -329,12 +372,22 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
   useEffect(() => { let alive = true; void call<{ gaps: GapLite[] }>(url).then((r) => {
     if (!alive) return; setGaps(r.gaps); if (!r.gaps.length && auto && problemId) void find(); }).catch((e) => alive && setErr(errorText(e))); return () => { alive = false; }; }, [url, auto, find, problemId]);
   const markGap = async (g: GapLite, kind: "known" | "undo") => { try { const r = await call<{ gap: GapLite }>("/api/scene/mark", { gapId: g.id, kind }); setGaps((xs) => xs?.map((x) => (x.id === g.id ? r.gap : x)) ?? null); } catch (e) { setErr(errorText(e)); } };
-  if (session) return <SceneSession gapIds={session.ids} pick={session.pick} onClose={() => { setSession(null); void load(); }} />;
   const open = gaps?.filter((g) => !g.known && !g.dismissed) ?? [];
+  const ordered = [...open].sort((a, b) => (a.unit?.order ?? 999) - (b.unit?.order ?? 999) || a.layer - b.layer || a.dose - b.dose);
+  // 목차가 있는 풀이(생각 따라가기로 뽑은 것)는 처음부터 카드 한 장씩(11/16). 장면은 뽑을 때 만들어 두었으니 열어도 AI를 쓰지 않는다. [목록]으로 전체 보기.
+  const [view, setView] = useState<"card" | "list" | null>(null);
+  const cardMode = view === "card" || (view === null && open.length > 0 && open.every((g) => g.unit) && !busy);
+  if (session) return <SceneSession gapIds={session.ids} pick={session.pick} gaps={gaps ?? undefined} onClose={() => { setSession(null); void load(); }} />;
+  if (cardMode) return <section className="sc-gaps">
+    <header className="sc-gapshead"><span className="rv-eyebrow">상황 재현</span><h3 className="rv-title">이 풀이에서 놓친 생각</h3><span className="cs-gap" />
+      <button className="btn small" onClick={() => setView("list")}>전체 목록</button></header>
+    {problemId ? <FollowView problemId={problemId} key={open.map((g) => g.id).join()} /> : null}
+    <SceneSession gapIds={ordered.map((g) => g.id)} gaps={gaps ?? undefined} noPrefetch onClose={() => { setView("list"); void load(); }} />
+  </section>;
   return <section className="sc-gaps">
     <header className="sc-gapshead"><span className="rv-eyebrow">상황 재현</span><h3 className="rv-title">{runId ? "이 실습에서 놓친 생각" : "이 풀이에서 놓친 생각"}</h3><span className="cs-gap" />
-      {open.length ? <button className="btn small primary" onClick={() => setSession({ ids: open.sort((a, b) => (a.unit?.order ?? 999) - (b.unit?.order ?? 999) || a.layer - b.layer || a.dose - b.dose).map((g) => g.id) })}>모두 확인하기(추천대로)</button> : null}</header>
-    {busy ? <p className="small muted"><span className="lc2-caret" /> 풀이 기록을 처음부터 따라가며 막힌 곳을 찾고, 다시 물을 문제를 만드는 중이에요… (AI 여러 번, 2~3분)</p> : null}
+      {open.length ? <>{open.every((g) => g.unit) ? <button className="btn small" onClick={() => setView("card")}>카드로 보기</button> : null}<button className="btn small primary" onClick={() => setSession({ ids: ordered.map((g) => g.id) })}>모두 확인하기(추천대로)</button></> : null}</header>
+    {busy && problemId ? <Finding problemId={problemId} /> : null}
     {problemId && !busy && gaps?.length ? <FollowView problemId={problemId} key={gaps.map((g) => g.id).join()} /> : null}
     {err ? <p className="small bad">{err}</p> : null}
     {gaps && !gaps.length && !busy ? <div className="row small"><span className="muted">{runId ? "아직 없어요. 목표를 마치면 실습 정리에서 생겨요." : "아직 찾지 않았어요."}</span>{problemId ? <button className="btn small" onClick={() => void find()}>놓친 생각 찾기</button> : null}</div> : null}
