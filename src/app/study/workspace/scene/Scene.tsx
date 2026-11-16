@@ -333,7 +333,8 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
   return <section className="sc-gaps">
     <header className="sc-gapshead"><span className="rv-eyebrow">상황 재현</span><h3 className="rv-title">{runId ? "이 실습에서 놓친 생각" : "이 풀이에서 놓친 생각"}</h3><span className="cs-gap" />
       {open.length ? <button className="btn small primary" onClick={() => setSession({ ids: open.sort((a, b) => a.layer - b.layer || a.dose - b.dose).map((g) => g.id) })}>모두 확인하기(추천대로)</button> : null}</header>
-    {busy ? <p className="small muted"><span className="lc2-caret" /> 풀이 기록에서 놓친 생각을 찾는 중이에요… (AI 1번)</p> : null}
+    {busy ? <p className="small muted"><span className="lc2-caret" /> 풀이 기록을 처음부터 따라가며 막힌 곳을 찾고, 다시 물을 문제를 만드는 중이에요… (AI 여러 번, 2~3분)</p> : null}
+    {problemId && !busy && gaps?.length ? <FollowView problemId={problemId} key={gaps.map((g) => g.id).join()} /> : null}
     {err ? <p className="small bad">{err}</p> : null}
     {gaps && !gaps.length && !busy ? <div className="row small"><span className="muted">{runId ? "아직 없어요. 목표를 마치면 실습 정리에서 생겨요." : "아직 찾지 않았어요."}</span>{problemId ? <button className="btn small" onClick={() => void find()}>놓친 생각 찾기</button> : null}</div> : null}
     {gaps?.length ? <ol className="sc-gaplist">{gaps.map((g) => <li key={g.id} className={g.known || g.dismissed ? "known" : ""}>
@@ -347,6 +348,27 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
     </li>)}</ol> : null}
     {gaps?.length ? <p className="small muted">거리를 누르면 바로 확인해요(추천 = 지금 차례, 다른 거리를 먼저 골라도 돼요). 맞으면 한 칸 멀리(똑같이 → 비슷하게 → 응용), 틀리면 한 칸 가까이. 응용까지 통과하면 &lsquo;앎&rsquo;이에요. {problemId ? <button className="linkish small" disabled={busy} onClick={() => void find(true)}>다시 찾기</button> : null}</p> : null}
   </section>;
+}
+
+/** 생각 따라가기 결과(11/16): 막힌 곳마다 끊은 생각 묶음 · 생각의 순서 · 흐름. 접어 두고 펼쳐 본다. */
+type Follow = { segments: Array<{ moments: number[]; thinking: string; stuckAt: number; stuck: string; kind: string; level: string; missing: string; hint: string; after: string; basics: string[] }>;
+  orderCheck: Array<{ moments: number[]; order: string; problem: string; better: string }>; flow: string };
+function FollowView({ problemId }: { problemId: string }) {
+  const [f, setF] = useState<Follow | null>(null);
+  useEffect(() => { let alive = true; void call<{ follow: Follow | null }>(`/api/scene/follow?problem=${encodeURIComponent(problemId)}`).then((r) => alive && setF(r.follow)).catch(() => {}); return () => { alive = false; }; }, [problemId]);
+  if (!f?.segments?.length) return null;
+  const span = (xs: number[]) => (xs.length > 1 ? `#${Math.min(...xs)}~#${Math.max(...xs)}` : xs.length ? `#${xs[0]}` : "");
+  return <details className="sc-follow">
+    <summary className="small"><b>생각의 흐름</b> <span className="muted">막힌 곳마다 끊은 생각 묶음 {f.segments.length}개</span></summary>
+    <ol className="sc-gaplist">{f.segments.map((g, i) => <li key={i}>
+      <div className="sc-gapline"><span className="sc-chip">{span(g.moments)}</span><span className="small">{g.thinking}</span></div>
+      {g.stuckAt ? <p className="small"><b>막힘 #{g.stuckAt} · {g.kind} · {g.level}</b> {g.stuck}<br /><span className="muted">빠진 조각:</span> {g.missing}<br /><span className="muted">힌트 뒤:</span> {g.after}</p>
+        : <p className="small muted">막히지 않고 끝났어요.</p>}
+      {g.basics?.length ? <p className="small muted">걸린 기본기: {g.basics.join(" · ")}</p> : null}
+    </li>)}</ol>
+    {f.orderCheck?.length ? <div className="small"><b>생각의 순서</b>{f.orderCheck.map((o, i) => <p key={i}>{o.order} <span className="muted">({o.moments.map((m) => `#${m}`).join(" ")})</span><br /><span className="muted">문제:</span> {o.problem}<br /><span className="muted">이랬으면:</span> {o.better}</p>)}</div> : null}
+    {f.flow ? <p className="small muted">{f.flow}</p> : null}
+  </details>;
 }
 
 /** 오늘 탭: 갈래마다 한 줄 */
