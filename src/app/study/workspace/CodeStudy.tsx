@@ -120,75 +120,96 @@ function Calibrated() {
 }
 
 type Found = { title: string; number: string; url: string; site: string; why: string; level: string; pattern: string };
-function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string) => void }) {
+type Intake = { route: "image" | "paste" | "named" | "find"; say: string; kind: "full" | "blank"; lang?: Lang; from?: string; lesson?: string; assumed?: string[]; candidates?: Found[] };
+/** 캡처를 보내기 좋게 줄인다(긴 변 1600px JPEG, 본문 1MB 제한 안으로). */
+async function shrinkImage(file: Blob): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error("이미지를 읽지 못했어요.")); i.src = url; });
+    for (const [side, q] of [[1600, 0.85], [1280, 0.75], [1000, 0.7]] as const) {
+      const k = Math.min(1, side / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const g = c.getContext("2d"); if (!g) break;
+      g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      const data = c.toDataURL("image/jpeg", q);
+      if (data.length < 950_000) return data;
+    }
+    throw new Error("캡처가 너무 커요. 문제 부분만 잘라서 다시 넣어 주세요.");
+  } finally { URL.revokeObjectURL(url); }
+}
+// 문제 받기(11/16 사용자 "입력창 하나로 가고 각 입력에 따라서 AI가 라우팅"): 캡처 · 붙여 넣은 글 · 문제 이름/번호 · 풀고 싶은 문제를 한 칸에서 받는다.
+// AI 1번(/api/code/intake)이 길을 고르고, 만들기는 지금의 /api/code/make(from · lesson)로 한다. 내장 문제집은 쓰지 않는다.
+function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [topic, setTopic] = useState("");
-  const [from, setFrom] = useState("");
-  const [lesson, setLesson] = useState("");
-  const [blank, setBlank] = useState(false);
-  const [lang, setLang] = useState<Lang>(storedLang());
-  const [busy, setBusy] = useState(false);
+  const [text, setText] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"" | "route" | "make">("");
   const [error, setError] = useState("");
-  /** A problem made before from the same address: open it, or make a new one anyway. */
-  const [existing, setExisting] = useState<{ id: string; title: string; createdAt: string; count: number } | null>(null);
-  // 문제 찾아오기(11/11 사용자 "인터넷에 찾긴 귀찮아. 얘가 서치해서 긁어오는 거지"): AI 웹 검색 → 후보 3개 → 고르면 from으로 만든다.
-  const [query, setQuery] = useState("");
-  const [found, setFound] = useState<Found[] | null>(null);
-  const [finding, setFinding] = useState(false);
+  const [plan, setPlan] = useState<Intake | null>(null);
   const [picking, setPicking] = useState("");
-  if (!open) return <div className="row"><button className="btn" onClick={() => setOpen(true)}>+ 문제 찾기 · 만들기 (AI)</button></div>;
-  const done = (id: string) => { setOpen(false); setTopic(""); setFrom(""); setLesson(""); setExisting(null); setFound(null); setQuery(""); onMade(id); };
-  const find = async () => {
-    setFinding(true); setError(""); setFound(null);
-    try { setFound((await call<{ candidates: Found[] }>("/api/code/find", { query })).candidates); } catch (e) { setError(errorText(e)); } finally { setFinding(false); }
+  /** A problem made before from the same address: open it, or make a new one anyway. */
+  const [existing, setExisting] = useState<{ id: string; title: string; createdAt: string; count: number; from: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  if (!open) return <div className="row"><button className="btn" onClick={() => setOpen(true)}>+ 문제 가져오기 (AI)</button></div>;
+  const done = (id: string) => { setOpen(false); setText(""); setImage(null); setPlan(null); setExisting(null); onMade(id); };
+  const takeImage = async (file: Blob | null | undefined) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setError("");
+    try { setImage(await shrinkImage(file)); } catch (e) { setError(errorText(e)); }
   };
-  const pick = async (c: Found) => {
-    setPicking(c.url); setError("");
+  const make = async (args: { from?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; again?: boolean }) => {
+    setBusy("make"); setError(""); setExisting(null);
     try {
-      const made = await call<{ problem?: { id: string }; existing?: { id: string } }>("/api/code/make", { from: c.number || c.url, kind: "full" });
-      const id = made.problem?.id ?? made.existing?.id;
-      if (id) done(id);
-    } catch (e) { setError(errorText(e)); } finally { setPicking(""); }
+      const lang = args.kind === "blank" ? args.lang ?? storedLang() : undefined;
+      const made = await call<{ problem?: { id: string }; existing?: { id: string; title: string; createdAt: string; count: number } }>("/api/code/make",
+        { ...(args.from ? { from: args.from } : {}), ...(args.lesson ? { lesson: args.lesson } : {}), kind: args.kind, ...(lang ? { lang } : {}), ...(args.again ? { again: true } : {}) });
+      if (made.existing) setExisting({ ...made.existing, from: args.from ?? "" }); else if (made.problem) done(made.problem.id);
+    } catch (e) { setError(errorText(e)); } finally { setBusy(""); }
   };
-  const make = async (again = false) => {
-    setBusy(true); setError(""); setExisting(null);
-    try {
-      const made = await call<{ problem?: { id: string }; existing?: { id: string; title: string; createdAt: string; count: number } }>("/api/code/make", { ...(topic.trim() ? { topic } : {}), ...(from.trim() ? { from: from.trim() } : {}), ...(lesson.trim() ? { lesson } : {}), kind: blank ? "blank" : "full", lang, ...(again ? { again: true } : {}) });
-      if (made.existing) setExisting(made.existing); else if (made.problem) done(made.problem.id);
-    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  const send = async () => {
+    if (busy) return;
+    setBusy("route"); setError(""); setPlan(null); setExisting(null);
+    let got: Intake | null = null;
+    try { got = await call<Intake>("/api/code/intake", { text, ...(image ? { image } : {}) }); setPlan(got); }
+    catch (e) { setError(errorText(e)); }
+    finally { setBusy(""); }
+    if (!got || got.route === "find") return;
+    await make({ ...(got.from ? { from: got.from } : {}), ...(got.lesson ? { lesson: got.lesson } : {}), kind: got.kind, ...(got.lang ? { lang: got.lang } : {}) });
   };
+  const pick = async (c: Found) => { setPicking(c.url); await make({ from: c.number || c.url, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); setPicking(""); };
+  const working = busy === "route" ? (image ? "캡처를 읽는 중… (10~30초)" : "무엇을 할지 보는 중… (5~30초)")
+    : busy === "make" ? (plan?.route === "named" ? "문제를 가져오는 중… (백준 문제는 몇 초면 열려요)" : "문제를 만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "";
   return (
     <section className="panel stack">
-      <b>문제 찾아오기</b>
-      <p className="small muted">풀고 싶은 걸 말로 적어요. 비워 두면 다음에 배울 것으로 찾아요. 지금까지 푼 기록을 보고 수준을 맞춰서, 인터넷에서 진짜 문제를 찾아 와요.</p>
+      <b>문제 가져오기</b>
+      <p className="small muted">한 칸에 적어요. 백준 번호 · 문제 이름이면 그 문제를, 문제 글을 붙여 넣거나 캡처를 넣으면 그걸로, 풀고 싶은 걸 말하면(비워도 돼요) 지금 수준에 맞는 문제를 찾아 와요. &quot;빈칸으로&quot;, &quot;C++로&quot;처럼 덧붙여도 돼요.</p>
+      <textarea className="ws-input" rows={text.includes("\n") ? 6 : 2} value={text} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !text.includes("\n")) { e.preventDefault(); void send(); } }}
+        onPaste={(e) => { const f = [...e.clipboardData.items].find((i) => i.type.startsWith("image/"))?.getAsFile(); if (f) { e.preventDefault(); void takeImage(f); } }}
+        onDragOver={(e) => e.preventDefault()} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) { e.preventDefault(); void takeImage(f); } }}
+        placeholder="예: 7785 · 백준 토마토 · BFS 쉬운 거 · 문제 글 붙여 넣기 · 캡처는 Ctrl+V나 끌어 놓기" />
+      {image ? <div className="row small"><img src={image} alt="넣은 캡처" style={{ maxHeight: 120, maxWidth: 240, borderRadius: 8, border: "1px solid var(--line)" }} />
+        <button className="btn ghost small" disabled={Boolean(busy)} onClick={() => setImage(null)}>캡처 빼기</button></div> : null}
       <div className="row">
-        <input className="ws-input cs-find-q" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !finding) void find(); }} placeholder="예: BFS 쉬운 거, 투 포인터 하나 더 (비워도 돼요)" />
-        <button className="btn primary small" disabled={finding || Boolean(picking)} onClick={() => void find()}>{finding ? "찾는 중… (10~30초)" : found ? "다시 찾기" : "찾기"}</button>
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void takeImage(e.target.files?.[0]); e.target.value = ""; }} />
+        <button className="btn small" disabled={Boolean(busy)} onClick={() => fileRef.current?.click()}>캡처 넣기</button>
+        <button className="btn primary small" disabled={Boolean(busy) || Boolean(picking)} onClick={() => void send()}>{busy ? working : plan ? "다시 보내기" : "보내기"}</button>
+        <button className="btn ghost small" disabled={Boolean(busy)} onClick={() => setOpen(false)}>닫기</button>
       </div>
-      {found ? (found.length ? (
-        <ul className="cs-found">{found.map((c) => (
+      {plan?.say ? <p className="small">{plan.say}</p> : null}
+      {plan?.assumed?.length ? <div className="small muted">캡처에서 안 보여 채운 조건:<ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{plan.assumed.map((a, i) => <li key={i}>{a}</li>)}</ul></div> : null}
+      {plan?.route === "find" ? (plan.candidates?.length ? (
+        <ul className="cs-found">{plan.candidates.map((c) => (
           <li key={c.url}>
             <div className="cs-found-text"><b>{c.title}</b> <span className="small muted">{[c.site, c.level, c.pattern].filter(Boolean).join(" · ")}</span>{c.why ? <p className="small">{c.why}</p> : null}</div>
-            <button className="btn small" disabled={Boolean(picking) || finding} onClick={() => void pick(c)}>{picking === c.url ? "가져오는 중…" : "이걸로 풀기"}</button>
+            <button className="btn small" disabled={Boolean(picking) || Boolean(busy)} onClick={() => void pick(c)}>{picking === c.url ? "가져오는 중…" : "이걸로 풀기"}</button>
           </li>))}
-        </ul>) : <p className="small muted">새로 고를 만한 문제를 못 찾았어요. 말을 조금 바꿔서 다시 찾아 봐요.</p>) : null}
-      <hr className="cs-find-hr" />
-      <b>직접 넣기</b>
-      <p className="small muted">주제만 적거나, 문제·풀이 블로그 주소나 백준 번호를 넣거나, 강의 글이나 문제 글을 붙여 넣어요. 모범 풀이가 원문 예제(없으면 단순 풀이)와 맞아야 저장해요.</p>
-      <input className="ws-input" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="주소나 백준 번호 (예: https://…/123, 7785)" />
-      <input className="ws-input" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="주제 (예: 이분 탐색으로 경계 찾기)" />
-      <textarea className="ws-input" rows={5} value={lesson} onChange={(e) => setLesson(e.target.value)} placeholder="강의 글이나 문제 글 붙여 넣기 (선택)" />
-      <div className="row">
-        <label className="row small"><input type="checkbox" checked={blank} onChange={(e) => setBlank(e.target.checked)} /> 빈칸 코드 문제로</label>
-        {blank ? <select className="ws-select" value={lang} onChange={(e) => setLang(e.target.value as Lang)}>{langs.filter((l) => l.ready).map((l) => <option key={l.lang} value={l.lang}>{l.label}</option>)}</select> : null}
-        <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim() || from.trim())} onClick={() => void make()}>{busy ? (from.trim() ? "가져오는 중… (백준 문제는 몇 초면 열려요)" : "만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "만들기"}</button>
-        <button className="btn ghost small" onClick={() => setOpen(false)}>닫기</button>
-      </div>
+        </ul>) : <p className="small muted">새로 고를 만한 문제를 못 찾았어요. 말을 조금 바꿔서 다시 보내 봐요.</p>) : null}
       {existing ? (
         <div className="row small">
-          <span>이 주소로 만든 문제가 이미 있어요: <b>{existing.title}</b> ({existing.createdAt.slice(5, 10).replace("-", "/")}{existing.count > 1 ? ` 외 ${existing.count - 1}개` : ""})</span>
+          <span>이미 가져온 문제예요: <b>{existing.title}</b> ({existing.createdAt.slice(5, 10).replace("-", "/")}{existing.count > 1 ? ` 외 ${existing.count - 1}개` : ""})</span>
           <button className="btn primary small" onClick={() => done(existing.id)}>열기</button>
-          <button className="btn ghost small" disabled={busy} onClick={() => void make(true)}>새로 만들기</button>
+          <button className="btn ghost small" disabled={Boolean(busy)} onClick={() => void make({ from: existing.from, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}), again: true })}>새로 만들기</button>
         </div>
       ) : null}
       {error ? <p className="ws-err">{error}</p> : null}
