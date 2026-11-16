@@ -1,4 +1,4 @@
-// 실습 정리를 앱 화면 없이 돌린다(11/16): 실습 기록을 실습 서버 없이 바로 읽어(lib/library.ts) 메인 빌드를 단계로 정리 → <데이터>/practice-notes/<실습>.json.
+// 실습 정리를 앱 화면 없이 돌린다(11/16): 실습 기록을 실습 서버 없이 바로 읽어(lib/library.ts) 배운 개념을 강의식으로 정리 → <데이터>/practice-notes/<실습>.json.
 // 실행: node --experimental-strip-types tools/practice-notes/run.ts <실습 id>   (AI 1번)
 // 데이터 폴더 STUDY_FORGE_DATA_DIR(없으면 ./data), 실습 데이터 PC_DATA_DIR(없으면 <데이터>/course), 로그인은 앱과 같은 ChatGPT 로그인.
 import { existsSync, readFileSync } from "node:fs";
@@ -27,5 +27,7 @@ const out = await makeNotes(runId, undefined, { title: lib.title, scenes: lib.sc
 const n = out.notes;
 console.log(`끝났어요: ${Math.round((Date.now() - t0) / 1000)}초`);
 console.log(`만든 것: ${n.made}`);
-console.log(`단계: ${n.steps.map((x, i) => `${i + 1}. ${x.title}`).join(" → ")}`);
-console.log(`저장: ${path.join(DATA, "practice-notes", `${runId}.json`)} — 3번판 앱의 기억 → 도서관 → 이 실습에서 보여요.`);
+for (const [i, x] of n.lessons.entries()) {
+  console.log(`\n${i + 1}강. ${x.title}\n  ${x.concept}\n  ${x.principle}\n  이 실습에서는: ${x.inPractice}\n  기억할 것: ${x.remember}`);
+}
+console.log(`\n저장: ${path.join(DATA, "practice-notes", `${runId}.json`)} — 3번판 앱의 기억 → 도서관 → 이 실습에서 보여요.`);

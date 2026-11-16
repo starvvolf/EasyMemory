@@ -1,11 +1,11 @@
 "use client";
-// 실습 정리(11/16): 그 실습의 메인 빌드를 단계마다 "무엇을 위해 → 어떻게"로 친절하게 다시 들려주는 복습 글.
+// 실습 정리(11/16): 그 실습에서 배운 개념과 원리를 강의하듯 담백하게 다시 들려주는 복습 글(코드 조각은 없음).
 import { useEffect, useState } from "react";
 import { call, errorText } from "../api";
 import "./scene.css";
 
-type Step = { title: string; why: string; how: string; code: Array<{ file: string; code: string }>; remember: string };
-type Notes = { made: string; steps: Step[] };
+type Lesson = { title: string; concept: string; principle: string; inPractice: string; remember: string };
+type Notes = { made: string; lessons: Lesson[] };
 
 export function PracticeNotes({ runId }: { runId: string }) {
   const [n, setN] = useState<{ at: string; notes: Notes } | null | undefined>(undefined);
@@ -29,17 +29,17 @@ export function PracticeNotes({ runId }: { runId: string }) {
   return <section className="sc-gaps">
     <header className="sc-gapshead"><span className="rv-eyebrow">실습 다시 보기</span><h3 className="rv-title">{notes?.made || "배운 것 정리"}</h3><span className="cs-gap" />
       {n !== undefined && !busy ? <button className="btn small" onClick={() => void make()}>{notes ? "다시 정리 (AI 1번)" : "배운 것 정리하기 (AI 1번)"}</button> : null}</header>
-    {busy ? <div className="sc-card sc-making"><p><span className="sc-dots" aria-hidden="true"><i /><i /><i /></span> 실습 기록을 처음부터 따라가며 만든 과정을 단계별로 정리하는 중</p>
+    {busy ? <div className="sc-card sc-making"><p><span className="sc-dots" aria-hidden="true"><i /><i /><i /></span> 실습 기록을 처음부터 따라가며 배운 개념을 정리하는 중</p>
       <p className="small muted">{sec}초째 · 보통 1분 안팎이에요.</p></div> : null}
     {err ? <p className="small bad">{err}</p> : null}
     {notes && !busy ? <>
-      {/* 11/16 사용자: 메인 빌드만, 무엇을 위해 어떻게 했는지 친절하게 — 실습 내용을 다시 따라가는 복습 */}
-      <ol className="sc-steps">{notes.steps.map((x, i) => <li key={i} className="sc-card">
-        <p className="rv-eyebrow">{i + 1}단계</p>
+      {/* 11/16 사용자: 어렵게 가지 말고 배운 개념 · 원리를 강의식으로 담백하게 — 코드 조각은 앞뒤 없이 보면 알기 어려워 뺌 */}
+      <ol className="sc-steps">{notes.lessons.map((x, i) => <li key={i} className="sc-card">
+        <p className="rv-eyebrow">{i + 1}강</p>
         <h4>{x.title}</h4>
-        {x.why ? <p className="small"><b>무엇을 위해</b> {x.why}</p> : null}
-        {x.how ? <p><b>어떻게</b> {x.how}</p> : null}
-        {x.code.map((c, k) => <div key={k}>{c.file ? <p className="small muted">{c.file}</p> : null}<pre className="sc-code small">{c.code}</pre></div>)}
+        {x.concept ? <p>{x.concept}</p> : null}
+        {x.principle ? <p>{x.principle}</p> : null}
+        {x.inPractice ? <p className="small"><b>이 실습에서는</b> {x.inPractice}</p> : null}
         {x.remember ? <p className="small"><b>기억할 것</b> {x.remember}</p> : null}
       </li>)}</ol>
       <p className="small muted">정리한 때 {new Date(n!.at).toLocaleString("ko-KR")}</p></> : null}

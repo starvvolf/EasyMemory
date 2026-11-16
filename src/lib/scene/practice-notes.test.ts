@@ -1,4 +1,4 @@
-// 실습 정리: 기록 글 만들기 · 코드 조각은 기록에 있는 것만 · 빈 단계는 뺌
+// 실습 정리: 기록 글 만들기 · 개념만(코드 블록은 걷어냄) · 빈 개념은 뺌
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { cleanNotes, notesUser } from "./practice-notes.ts";
@@ -17,13 +17,13 @@ test("실습 기록을 순간 번호가 붙은 글로", () => {
   assert.match(text, /#3 10:02 실행: python main\.py → 실패 \(FileNotFoundError\)/);
 });
 
-test("단계의 코드 조각은 기록에 있는 것만(+ 표시는 떼고), 빈 단계는 뺀다", () => {
-  const { text } = notesUser("단어 세기", chapters);
-  const out = cleanNotes({ made: "단어 세는 프로그램", steps: [
-    { title: "파일 열기", why: "글을 읽으려고", how: "with open으로 열고 한 줄씩 읽었다.", remember: "다 읽으면 저절로 닫힌다", moments: [2],
-      code: [{ file: "main.py", code: "+ with open('a.txt') as f:\n+     for line in f:" }, { file: "x.py", code: "print('지어냄')" }] },
-    { title: "", why: "", how: "", remember: "", moments: [], code: [] },
-  ] }, text);
-  assert.equal(out.steps.length, 1);
-  assert.deepEqual(out.steps[0].code, [{ file: "main.py", code: "with open('a.txt') as f:\n    for line in f:" }]);
+test("개념 글에서 코드 블록은 걷어내고, 빈 개념 · 없는 순간 번호는 뺀다", () => {
+  const out = cleanNotes({ made: "단어 세는 프로그램", lessons: [
+    { title: "파일 열기와 닫기", concept: "파일은 열어야 읽을 수 있다.", principle: "with로 열면 다 쓴 뒤 저절로 닫힌다.\n```python\nwith open('a.txt') as f:\n```",
+      inPractice: "글자 수를 세려고 파일을 한 줄씩 읽었다.", remember: "다 읽으면 저절로 닫힌다", moments: [2, 9] },
+    { title: "", concept: "", principle: "", inPractice: "", remember: "", moments: [] },
+  ] }, 3);
+  assert.equal(out.lessons.length, 1);
+  assert.equal(out.lessons[0].principle, "with로 열면 다 쓴 뒤 저절로 닫힌다.");
+  assert.deepEqual(out.lessons[0].moments, [2]);
 });
