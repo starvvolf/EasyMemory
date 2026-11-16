@@ -8,6 +8,7 @@
 // Nothing here is saved to the public repository: the text goes to the problem maker, which keeps it in the data folder.
 import { archivedBojProblem, archivedUrl, decodeEntities, htmlToText, type Fetcher, type Original } from "./archive.ts";
 import { CodeError } from "./problems.ts";
+import { note } from "./progress.ts";
 
 export type Page = { url: string; title: string; text: string; links: string[] };
 export type Resolved = { lesson: string; title: string; url: string; via: "boj-archive" | "page" | "page-archive"; boj?: string;
@@ -60,16 +61,20 @@ export async function resolveSource(input: string, fetcher: Fetcher = fetch): Pr
   const text = input.trim();
   const boj = /^(\d{3,6})$/.exec(text)?.[1] ?? /acmicpc\.net\/problem\/(\d{3,6})\b/.exec(text)?.[1];
   if (boj && !/^https?:\/\/(?!(?:www\.)?acmicpc\.net)/i.test(text)) {
+    note(`백준 ${boj}번 원문을 인터넷 아카이브에서 찾고 있어요`);
     const original = await archivedBojProblem(boj, fetcher).catch(() => null);
+    if (original) note(`원문을 찾았어요: ${original.title}`);
     if (!original) throw new CodeError(422, `백준 ${boj}번 원문을 인터넷 아카이브에서 찾지 못했어요. 그 문제를 푼 블로그 주소를 넣거나 문제 글을 붙여 넣어 주세요.`);
     return { lesson: lessonOf(original, boj), title: `BOJ ${boj} ${original.title}`, url: original.url, via: "boj-archive", boj, original };
   }
   if (!/^https?:\/\//i.test(text)) throw new CodeError(400, "http(s)로 시작하는 주소나 백준 문제 번호를 넣어 주세요.");
   const url = readableUrl(text);
   let page: Page | null = null, why = "", via: Resolved["via"] = "page";
+  note(`페이지를 읽고 있어요: ${(() => { try { return new URL(text).host; } catch { return text.slice(0, 40); } })()}`);
   try { page = await fetchPage(url, fetcher); why = unusable(page); }
   catch (e) { why = `페이지를 열지 못했어요 (${(e as Error).message})`; }
   if (!page || why) {
+    note("페이지가 안 열려서 인터넷 아카이브 사본을 찾고 있어요");
     const copy = await archivedUrl(text, fetcher).catch(() => null);
     const archived = copy ? await fetchPage(copy, fetcher).catch(() => null) : null;
     if (!archived || unusable(archived)) throw new CodeError(422, `${why}. 인터넷 아카이브 사본도 없어서 가져오지 못했어요. 글을 복사해서 붙여 넣어 주세요.`);
@@ -78,6 +83,7 @@ export async function resolveSource(input: string, fetcher: Fetcher = fetch): Pr
   // A page about one Baekjoon problem: the archived original is the answer key, when there is one.
   const number = bojNumberOf(page);
   if (number) {
+    note(`이 글이 다루는 백준 ${number}번 원문을 찾고 있어요`);
     const original = await archivedBojProblem(number, fetcher).catch(() => null);
     if (original) return { lesson: `${lessonOf(original, number)}\n\n[참고: 이 문제를 다룬 글 ${text}]\n${page.text.slice(0, 8000)}`, title: `BOJ ${number} ${original.title}`, url: original.url, via: "boj-archive", boj: number, original };
   }

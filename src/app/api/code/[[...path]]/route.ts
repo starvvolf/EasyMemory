@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { findProblems } from "@/lib/code/find";
 import { intake } from "@/lib/code/intake";
+import { jobId, note, readProgress, withProgress } from "@/lib/code/progress";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
@@ -136,9 +137,10 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "find" && m === "POST") { const b = await body(z.object({ query: z.string().max(300) })); return json(await findProblems(b.query)); }
     // 문제 받기 창구(11/16): 입력창 하나 + 캡처. AI 1번이 길(캡처 · 붙여 넣기 · 문제 이름/번호 · 찾기)을 고른다. 만들기는 화면이 make로.
     if (p[0] === "intake" && m === "POST") {
-      const b = await body(z.object({ text: z.string().max(60_000), image: z.string().max(990_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "캡처 이미지 형식이 맞지 않아요.").optional() }));
-      return json(await intake({ text: b.text, ...(b.image ? { image: b.image } : {}) }));
+      const b = await body(z.object({ job: z.string().regex(jobId).optional(), text: z.string().max(60_000), image: z.string().max(990_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "캡처 이미지 형식이 맞지 않아요.").optional() }));
+      return json(await withProgress(b.job, () => intake({ text: b.text, ...(b.image ? { image: b.image } : {}) })));
     }
+    if (p[0] === "progress" && p[1] && m === "GET") return json(readProgress(z.string().regex(jobId).parse(p[1])));
     if (p[0] === "make" && m === "POST") {
       const b = await body(z.object({ topic: z.string().max(300).optional(), lesson: z.string().max(60_000).optional(), kind: z.enum(["full", "blank"]), lang: lang.optional(),
         sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional(),
@@ -153,11 +155,12 @@ async function inner(request: Request, context: RouteContext) {
         /** 실험: the faulty solutions' model for this request only. */
         mutantsModel: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional(),
         /** Wait for the whole problem even when it could open at once (time measurements). */
-        wait: z.boolean().optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
-      const { from, again, wait, ...rest } = b;
+        wait: z.boolean().optional(), job: z.string().regex(jobId).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
+      const { from, again, wait, job, ...rest } = b;
+      return json(await withProgress(job, async () => {
       const got = from?.trim() ? await resolveSource(from) : null;
       const existing = got && !again ? await findBySource(got.url, rest.kind) : null;
-      if (existing) return json({ existing });
+      if (existing) { note("이미 가져온 문제가 있어요"); return { existing }; }
       // 바로 열기: an imported original is shown at once (read it, run the examples); the hidden tests follow in the background.
       if (got?.original && rest.kind === "full" && !wait) {
         const pending = await savePreparing({ title: got.title.replace(/^BOJ (\d+) /, "BOJ $1번: "), statement: got.original.statement, inputText: got.original.inputText, outputText: got.original.outputText,
@@ -165,12 +168,14 @@ async function inner(request: Request, context: RouteContext) {
         void prepare(pending.id, got, rest);
         // 백준 문제면 PS 튜터 재료를 숨은 테스트와 같이 만든다(11/10 사용자 "같이 만들어", AI 1번).
         void modelForProblem(pending).catch(() => undefined);
-        return json({ problem: publicProblem(pending) });
+        note("문제를 먼저 열어요. 숨은 테스트는 뒤에서 만들어요 (제출은 다 만들어진 뒤에)");
+        return { problem: publicProblem(pending) };
       }
       const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
         sourceTitle: got.title, sourceUrl: got.url, ...(got.original ? { original: got.original } : {}) } : rest));
       void readProblem(made.id).then((full) => modelForProblem(full)).catch(() => undefined);
-      return json({ problem: publicProblem(made) });
+      return { problem: publicProblem(made) };
+      }));
     }
     // 바킹독 문제집: the built-in list, and filling one problem the first time it is picked.
     if (p[0] === "bakingdog" && p.length === 1 && m === "GET") return json({ chapters: await bakingdogChapters() });
