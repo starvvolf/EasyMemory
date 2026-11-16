@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { findProblems } from "@/lib/code/find";
+import { intake } from "@/lib/code/intake";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
@@ -133,6 +134,11 @@ async function inner(request: Request, context: RouteContext) {
     }
     // 문제 찾아오기(11/11): AI 웹 검색 1번 → 후보 3개(이미 있는 문제는 코드가 거름). 고르면 화면이 make(from)로 만든다.
     if (p[0] === "find" && m === "POST") { const b = await body(z.object({ query: z.string().max(300) })); return json(await findProblems(b.query)); }
+    // 문제 받기 창구(11/16): 입력창 하나 + 캡처. AI 1번이 길(캡처 · 붙여 넣기 · 문제 이름/번호 · 찾기)을 고른다. 만들기는 화면이 make로.
+    if (p[0] === "intake" && m === "POST") {
+      const b = await body(z.object({ text: z.string().max(60_000), image: z.string().max(990_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "캡처 이미지 형식이 맞지 않아요.").optional() }));
+      return json(await intake({ text: b.text, ...(b.image ? { image: b.image } : {}) }));
+    }
     if (p[0] === "make" && m === "POST") {
       const b = await body(z.object({ topic: z.string().max(300).optional(), lesson: z.string().max(60_000).optional(), kind: z.enum(["full", "blank"]), lang: lang.optional(),
         sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional(),

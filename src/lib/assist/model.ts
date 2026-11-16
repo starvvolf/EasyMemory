@@ -27,6 +27,7 @@ const clip = (text: string, n: number) => text.length > n ? `${text.slice(0, n)}
 
 type AskOptions = { heavy?: boolean; caller?: ModelCaller; /** this call only: a model and effort other than the assist settings */ model?: string; effort?: string;
   /** 웹 검색 도구(ChatGPT 경로만) */ webSearch?: boolean;
+  /** 같이 보낼 이미지(data URL, ChatGPT 경로만). 11/16 문제 받기 창구의 캡처 */ images?: Array<{ label: string; dataUrl: string; detail?: "low" | "high" }>;
   /** 글이 오는 대로 지금까지의 글(화면에 스트리밍으로, 11/11 알고리즘 AI 튜터 채팅). 끝난 글은 여전히 통째로 돌아온다. */ onText?: (textSoFar: string) => void;
   /** 프롬프트 캐시(11/11): 같은 키 + 같은 앞부분이면 같은 캐시로. tail = 호출마다 바뀌는 뒷부분(user 뒤에 붙음, 앞부분이 캐시되게). */ cacheKey?: string; tail?: string;
   /** 다 받은 뒤 토큰 수(입력 · 그중 캐시에서 온 것 · 출력) */ onUsage?: (u: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number }) => void };
@@ -70,7 +71,7 @@ export async function askJson<T>(purpose: string, system: string, user: string, 
   const sent = { system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000) };
   const reply = await timed(purpose, model, effort, sent,
     (onText) => callModel({ purpose, ...sent, json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
-      model, effort, caller: options.caller ?? LOCAL_CALLER, onText: (t: string) => { onText(); options.onText?.(t); }, ...(options.webSearch ? { webSearch: true } : {}) }), (r) => JSON.stringify(r.data ?? "", null, 1));
+      model, effort, caller: options.caller ?? LOCAL_CALLER, onText: (t: string) => { onText(); options.onText?.(t); }, ...(options.webSearch ? { webSearch: true } : {}), ...(options.images?.length ? { images: options.images } : {}) }), (r) => JSON.stringify(r.data ?? "", null, 1));
   if (reply.usage) options.onUsage?.(reply.usage);
   return reply.data as T;
 }
