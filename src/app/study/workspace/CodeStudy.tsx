@@ -195,7 +195,7 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
   };
   /** 같은 진행 목록에 이어 적는다(보내기 → 만들기). 후보를 고를 때처럼 새로 시작하면 새 job. */
   function jobRef() { if (job) return job; const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; setJob(id); startedAt.current = Date.now(); return id; }
-  const pick = async (c: Found) => { setPicking(c.url); await make({ from: c.number || c.url, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); setPicking(""); };
+  const pick = async (c: Found) => { setPicking(c.url); await make({ from: c.number && /acmicpc\.net/.test(c.url) ? c.number : c.url, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); setPicking(""); };
   const working = busy === "route" ? (image ? "캡처를 읽는 중… (10~30초)" : "무엇을 할지 보는 중… (5~30초)")
     : busy === "make" ? (plan?.route === "named" ? "문제를 가져오는 중… (백준 문제는 몇 초면 열려요)" : "문제를 만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "";
   return (

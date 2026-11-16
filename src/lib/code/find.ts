@@ -58,7 +58,11 @@ export function pickCandidates(list: Found[], have: Set<string>) {
   const seen = new Set<string>();
   const out: Found[] = [];
   for (const f of list) {
-    const number = (/^\d{3,6}$/.exec(f.number?.trim() ?? "")?.[0]) ?? (/acmicpc\.net\/problem\/(\d{3,6})/.exec(f.url ?? "")?.[1] ?? "");
+    // 번호는 백준 번호일 때만(11/16 사용자: SW Expert Academy 2068을 골랐는데 백준 2068로 바뀜). 다른 사이트 문제는 그 주소로 가져온다.
+    const rawUrl = f.url?.trim() ?? "";
+    const boj = /acmicpc\.net\/problem\/(\d{3,6})/.exec(rawUrl)?.[1];
+    const elsewhere = /^https?:\/\//i.test(rawUrl) && !boj;
+    const number = boj ?? (!elsewhere && /백준|boj|baekjoon|acmicpc/i.test(`${f.site ?? ""} ${f.title ?? ""}`) || (!rawUrl && !f.site?.trim()) ? (/^\d{3,6}$/.exec(f.number?.trim() ?? "")?.[0] ?? "") : "");
     const url = /^https?:\/\//i.test(f.url?.trim() ?? "") ? f.url.trim() : number ? `https://www.acmicpc.net/problem/${number}` : "";
     if (!url) continue;
     const key = number || url.replace(/[?#].*$/, "").replace(/\/$/, "");
