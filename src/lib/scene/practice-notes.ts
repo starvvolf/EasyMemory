@@ -113,3 +113,14 @@ export async function makeNotes(runId: string, ask: NotesAsk = defaultAsk, given
   await writeFile(file(runId), JSON.stringify(out, null, 1), "utf8");
   return out;
 }
+
+/** 같은 실습을 두 번 만들지 않게(11/16): 만드는 중이면 그 작업을 같이 기다린다. 화면을 떠났다 돌아와도 이어서 보인다. */
+const inflight = new Map<string, ReturnType<typeof makeNotes>>();
+export function makeNotesOnce(runId: string) {
+  const had = inflight.get(runId);
+  if (had) return had;
+  const p = makeNotes(runId).finally(() => inflight.delete(runId));
+  inflight.set(runId, p);
+  return p;
+}
+export const notesPending = (runId: string) => inflight.has(runId);

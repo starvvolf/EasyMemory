@@ -13,14 +13,18 @@ export function PracticeNotes({ runId }: { runId: string }) {
   const [busy, setBusy] = useState(false);
   const [sec, setSec] = useState(0);
   const [err, setErr] = useState("");
-  // 실습 뒤 복습(11/16 사용자 "갖다 붙여"): 열었는데 정리가 없으면 저절로 만든다(AI 1번). 한 번만.
-  const [tried, setTried] = useState(false);
-  useEffect(() => { let alive = true; void call<{ notes: { at: string; notes: Notes } | null }>(`/api/practice-notes?run=${encodeURIComponent(runId)}`).then((r) => alive && setN(r.notes)).catch((e) => alive && setErr(errorText(e))); return () => { alive = false; }; }, [runId]);
-  useEffect(() => { if (!busy) return; const t0 = Date.now(); const t = setInterval(() => setSec(Math.round((Date.now() - t0) / 1000)), 1000); return () => clearInterval(t); }, [busy]);
   const make = async () => {
     setBusy(true); setSec(0); setErr("");
     try { setN((await call<{ notes: { at: string; notes: Notes } }>("/api/practice-notes", { runId })).notes); } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   };
+  // 실습 뒤 복습(11/16 사용자 "갖다 붙여"): 열었는데 정리가 없으면 저절로 만든다(AI 1번). 한 번만.
+  const [tried, setTried] = useState(false);
+  // 만드는 중이면(다른 화면에 갔다 왔을 때) 새로 시작하지 않고 같은 작업을 기다린다
+  useEffect(() => { let alive = true; void call<{ notes: { at: string; notes: Notes } | null; pending?: boolean }>(`/api/practice-notes?run=${encodeURIComponent(runId)}`)
+    .then((r) => { if (!alive) return; if (r.pending && !r.notes) { setTried(true); void make(); } else setN(r.notes); }).catch((e) => alive && setErr(errorText(e))); return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId]);
+  useEffect(() => { if (!busy) return; const t0 = Date.now(); const t = setInterval(() => setSec(Math.round((Date.now() - t0) / 1000)), 1000); return () => clearInterval(t); }, [busy]);
   useEffect(() => { if (n !== null || tried || busy) return; const t = setTimeout(() => { setTried(true); void make(); }, 0); return () => clearTimeout(t); });
   const notes = n?.notes;
   const cards = (notes?.layers.reduce((k, l) => k + l.items.filter((x) => x.card?.q).length, 0) ?? 0) + (notes?.traces?.length ?? 0);

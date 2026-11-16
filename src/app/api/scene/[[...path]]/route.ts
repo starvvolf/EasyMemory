@@ -19,6 +19,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, responseError } from "@/lib/http";
 import { followProgress, readFollow } from "@/lib/scene/follow";
+import { extractPending } from "@/lib/scene/service";
 import { answer, extract, gapsOf, gapsOfRun, mark, next, prefetch, preview, progress, thenView, today, tutorLink, why, whyQuestion } from "@/lib/scene/service";
 
 export const runtime = "nodejs";
@@ -34,6 +35,7 @@ export async function GET(request: Request, context: Context) {
     const gapId = z.string().regex(/^gap_[a-f0-9]{12}$/);
     if (p === "gaps" && q.get("run")) return NextResponse.json({ gaps: await gapsOfRun(z.string().regex(/^[A-Za-z0-9_-]{3,60}$/).parse(q.get("run"))) });
     if (p === "follow") return NextResponse.json({ follow: (await readFollow(z.string().regex(/^cp_[a-z0-9_-]{3,40}$/).parse(q.get("problem"))))?.reply ?? null });
+    if (p === "gaps" && q.get("problem") && extractPending(q.get("problem")!)) return NextResponse.json({ gaps: await gapsOf(z.string().regex(/^cp_[a-z0-9_-]{3,40}$/).parse(q.get("problem"))), pending: true });
     if (p === "gaps") return NextResponse.json({ gaps: await gapsOf(z.string().regex(/^cp_[a-z0-9_-]{3,40}$/).parse(q.get("problem"))) });
     if (p === "then") return NextResponse.json(await thenView(gapId.parse(q.get("gap"))));
     if (p === "tutor") return NextResponse.json(await tutorLink(gapId.parse(q.get("gap"))));

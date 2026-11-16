@@ -369,8 +369,9 @@ export function GapList({ problemId, runId, auto = false }: { problemId?: string
     setBusy(true); setErr("");
     try { setGaps((await call<{ gaps: GapLite[] }>("/api/scene/extract", { problemId, force })).gaps); } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   }, [problemId]);
-  useEffect(() => { let alive = true; void call<{ gaps: GapLite[] }>(url).then((r) => {
-    if (!alive) return; setGaps(r.gaps); if (!r.gaps.length && auto && problemId) void find(); }).catch((e) => alive && setErr(errorText(e))); return () => { alive = false; }; }, [url, auto, find, problemId]);
+  // 찾는 중(다른 화면에 갔다 왔을 때)이면 같은 작업을 기다린다 — 서버가 같은 작업에 붙여 줘서 AI를 두 번 쓰지 않는다
+  useEffect(() => { let alive = true; void call<{ gaps: GapLite[]; pending?: boolean }>(url).then((r) => {
+    if (!alive) return; setGaps(r.gaps); if (r.pending && problemId) void find(true); else if (!r.gaps.length && auto && problemId) void find(); }).catch((e) => alive && setErr(errorText(e))); return () => { alive = false; }; }, [url, auto, find, problemId]);
   const markGap = async (g: GapLite, kind: "known" | "undo") => { try { const r = await call<{ gap: GapLite }>("/api/scene/mark", { gapId: g.id, kind }); setGaps((xs) => xs?.map((x) => (x.id === g.id ? r.gap : x)) ?? null); } catch (e) { setErr(errorText(e)); } };
   const open = gaps?.filter((g) => !g.known && !g.dismissed) ?? [];
   const ordered = [...open].sort((a, b) => (a.unit?.order ?? 999) - (b.unit?.order ?? 999) || a.layer - b.layer || a.dose - b.dose);

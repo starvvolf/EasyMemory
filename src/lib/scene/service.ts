@@ -84,8 +84,13 @@ async function rememberEvent(gap: Gap, verdict: SceneVerdict, o: { hinted?: bool
   } catch { /* 기억 기록은 도움이지 필수가 아니다 */ }
 }
 
+/** 같은 풀이를 동시에 두 번 찾지 않게(11/16): 찾는 중이면 그 작업을 같이 기다린다(화면을 떠났다 돌아와도 AI를 두 번 쓰지 않음). */
+const extracting = new Map<string, Promise<Gap[]>>();
+export const extractPending = (problemId: string) => extracting.has(problemId);
 export async function extract(problemId: string, opts: { ask?: Ask; force?: boolean } = {}) {
-  const gaps = await extractGaps(problemId, opts);
+  let job = extracting.get(problemId);
+  if (!job) { job = extractGaps(problemId, opts).finally(() => extracting.delete(problemId)); extracting.set(problemId, job); }
+  const gaps = await job;
   await remember(gaps);
   prefetch(gaps.filter((g) => !g.state.known).map((g) => g.id), opts.ask ? { ask: opts.ask } : {});
   return (await readGaps()).filter((g) => g.origin.problemId === problemId).map(gapView);
