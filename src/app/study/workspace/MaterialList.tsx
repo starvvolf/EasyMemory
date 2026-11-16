@@ -122,7 +122,8 @@ function useOther<T>(url: string, pick: (r: unknown) => T[]) {
 }
 const problemsOf = (r: unknown) => ((r as { problems?: ProblemLite[] }).problems ?? []).slice().sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
 const runsOf = (r: unknown) => ((r as { runs?: RunLite[] }).runs ?? []).slice().sort((a, b) => b.lastAt.localeCompare(a.lastAt));
-export const enterCode = (id?: string) => { setBranch("code"); go("code", id ? { id } : {}); };
+// 11/16 사용자 "새 문제 고르기 해도 이전에 열어놓은 문제로 돌아감": 알고리즘 화면은 켜 둔 채 숨기므로(keep), id 없이 들어오면 열려 있던 문제를 닫으라고 알린다
+export const enterCode = (id?: string) => { setBranch("code"); if (!id) window.dispatchEvent(new CustomEvent("recaller:code-new")); go("code", id ? { id } : {}); };
 export const enterProject = (id?: string) => { setBranch("project"); if (id) projectOpen.id = id; go("project"); if (id) window.dispatchEvent(new CustomEvent("recaller:project-open", { detail: id })); };
 function OtherList({ branch, q }: { branch: "code" | "project"; q: string }) {
   const probs = useOther<ProblemLite>(branch === "code" ? "/api/code/problems" : "", problemsOf);

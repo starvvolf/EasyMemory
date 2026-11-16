@@ -52,8 +52,10 @@ export default function CodeStudy({ openId }: { openId?: string }) {
   useEffect(() => later(() => void load()), [load]);
   useEffect(() => {
     const on = (e: Event) => { const id = (e as CustomEvent<{ id?: string }>).detail?.id; if (id) setCurrent(id); };
+    const fresh = () => setCurrent(null); // 새 문제 고르기: 열려 있던 문제를 닫고 고르는 화면으로
     window.addEventListener("recaller:code-open", on);
-    return () => window.removeEventListener("recaller:code-open", on);
+    window.addEventListener("recaller:code-new", fresh);
+    return () => { window.removeEventListener("recaller:code-open", on); window.removeEventListener("recaller:code-new", fresh); };
   }, []);
   // 문제에서 나가면 공부 › 알고리즘 목록으로(위 "← 알고리즘 목록"과 같은 곳, 11/13)
   if (current) return <><MemoToast /><Solve key={current} id={current} langs={langs} onBack={() => { setCurrent(null); void load(); setBranch("code"); go("practice"); }} /></>;
