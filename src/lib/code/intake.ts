@@ -6,6 +6,7 @@
 // 길만 고르면 뒤는 지금의 /api/code/make(from · lesson)가 만든다. 내장 문제집은 쓰지 않는다(공유 배포판에서 뺄 예정).
 import { askJson, S } from "../assist/model.ts";
 import { findContext, pickCandidates, type Found } from "./find.ts";
+import { note } from "./progress.ts";
 
 export type Route = "image" | "paste" | "named" | "find";
 export type IntakeLang = "python" | "javascript" | "cpp" | "csharp";
@@ -88,6 +89,10 @@ export async function intake(input: { text: string; image?: string }, ask: Intak
     `[캡처 이미지] ${input.image ? "있음(아래)" : "없음"}`,
     `[입력]${text.length > ROUTE_TEXT_CAP ? ` (앞 ${ROUTE_TEXT_CAP}자만, 전체 ${text.length}자)` : ""}\n${text ? text.slice(0, ROUTE_TEXT_CAP) : "(비어 있음)"}`,
   ].filter(Boolean).join("\n\n");
+  note(input.image ? "캡처를 AI가 읽고 있어요 (문제 옮겨 적기 · 안 보인 조건 채우기)" : text ? "AI가 무엇을 할지 보고 있어요 (필요하면 웹 검색)" : "AI가 지금 수준에 맞는 문제를 웹에서 찾고 있어요");
   const reply = await ask(INTAKE_SYSTEM, user, input.image ? [{ label: "학습자가 붙인 캡처", dataUrl: input.image }] : []);
-  return settle(reply, input, c.have);
+  const out = settle(reply, input, c.have);
+  note(out.route === "image" ? `캡처에서 문제를 옮겨 적었어요${out.assumed?.length ? ` (안 보인 조건 ${out.assumed.length}개 채움)` : ""}` : out.route === "paste" ? "붙여 넣은 글로 만들게요"
+    : out.route === "named" ? `가져올 문제: ${out.from}` : `후보 ${out.candidates?.length ?? 0}개를 찾았어요`);
+  return out;
 }

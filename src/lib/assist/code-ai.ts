@@ -10,6 +10,7 @@ import { runTestgen, runVerify } from "../code/testgen/index.ts";
 import { searchKnowledge } from "../knowledge/api.ts";
 import { currentAttempt } from "../code/service.ts";
 import { learnerNoteFor } from "../code/tutor/summary.ts";
+import { note } from "../code/progress.ts";
 
 const TUTOR = `너는 알고리즘을 가르치는 튜터다. 학습자가 스스로 고치게 돕는다. 한국어로 짧게 답한다.
 - 통과 여부는 채점기가 정한다. 너는 맞았다/틀렸다를 단정하지 않는다.
@@ -219,6 +220,7 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   // The independent solution is asked for while the tests are being made (it needs only the statement).
   const second = early ?? solveAloneSafe({ statement: d.statement, inputText: d.inputText, outputText: d.outputText, constraints: d.constraints, examples: source.length ? source : [] });
   let mark = Date.now();
+  note("숨은 테스트를 만들고, 모범 풀이로 답을 내고, 틀린 풀이가 걸리는지 돌려 보고 있어요");
   const made = await runTestgen({ generator: d.generator, reference: d.reference, brute: d.brute, mutants: d.mutants.slice(0, 6), seed,
     sourceExamples: source, exampleInputs: source.length ? [] : d.exampleInputs.slice(0, 3), needCompared: source.length ? 0 : CROSS_MIN, smallCount: 300 });
   times.testsMs = Date.now() - mark;
@@ -228,6 +230,7 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   const tests: HiddenTest[] = made.tests.map((t) => ({ input: t.input, output: t.output, ...(t.regen && t.genSeed !== undefined ? { regen: { kind: t.kind, size: t.size, seed: t.genSeed, ...(t.regenOut ? { out: true } : {}) } } : {}) }));
   // 안전장치 ⑤: a solution from another call must print the same on every test, big ones included.
   mark = Date.now();
+  note("다른 AI가 따로 쓴 풀이를 기다려 모범 풀이와 답을 맞춰 보고 있어요");
   const alone = await second;
   times.secondMs = Date.now() - mark; mark = Date.now();
   const verified = alone ? await runVerify({ verify: { code: alone.code, brute: d.brute, tests: [...examples, ...made.tests] } }) : null;
@@ -276,6 +279,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   const makeLabel = input.effort ? `${makeModel} ${input.effort}` : makeModel;
   // PS → 지식 (2026-10-30): an imported statement rarely names its idea ("동적 계획법"), so the search alone came back empty
   // and each problem got its own spelling ("다이나믹 프로그래밍"). The names already on earlier code problems go along too.
+  note("내 기억에서 관련 지식 이름을 모으고 있어요");
   const searched = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
   const onProblems = await problemKnowledgeNames().catch(() => [] as string[]);
   const names = [...new Set([...searched, ...onProblems].map((n) => n.trim()).filter(Boolean))].slice(0, 80);
@@ -300,6 +304,8 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     let d: Drafted;
     // Asked for again on every try (a failed check is often the generator's), with the same reasons as the draft.
     const generatorOf = original ? askJson<{ generator: string }>("code:generator", GEN_SYSTEM, originalText + retry, GEN_SCHEMA, { model: makeModel }).then((g) => g.generator) : undefined;
+    note(tries > 1 ? `다시 쓰고 있어요 (${tries}번째 시도) — 지난번 막힌 곳: ${reasons.at(-1)?.slice(0, 70) ?? ""}`
+      : original ? "AI 4개가 동시에 쓰고 있어요: 문제 세팅 · 숨은 테스트 생성기 · 흔한 틀린 풀이 · 독립 풀이" : "AI가 문제 글 · 모범 풀이 · 숨은 테스트 생성기를 쓰고 있어요");
     try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + (original ? `\n\n${ORIGINAL_NOTE}` : "") + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, effort: input.effort || MAKE_EFFORT() }); }
     catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeLabel); throw error; }
     if (original) d = { ...d, title: input.sourceTitle?.replace(/^BOJ (\d+) /, "BOJ $1번: ") || d.title, statement: original.statement, inputText: original.inputText, outputText: original.outputText, sourceExamples: original.examples, mutants: await mutantsOf!,
@@ -310,11 +316,13 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     attempts.push({ ...times, ...(checked.ok ? {} : { reason: checked.reason.slice(0, 300) }) });
     await logTry(what, tries, times, checked.ok ? "" : checked.reason, makeLabel);
     if (!checked.ok) {
+      note(`확인에서 걸렸어요: ${checked.reason.slice(0, 80)}`);
       reasons.push(checked.reason);
       // The shared independent solution disagreed: it may be the wrong one, so the next try gets a fresh one too.
       if (checked.verify && original) early = solveAloneSafe({ ...original, examples: original.examples.slice(0, 3) });
       continue;
     }
+    note(`확인을 통과했어요 — 숨은 테스트 ${checked.tests.length}개로 저장해요`);
     return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: d.timeLimitMs > 0 ? Math.min(Math.max(Math.round(d.timeLimitMs), 500), 10_000) : 2000,
       constraints: d.constraints.slice(0, 1000), testgen: { generator: d.generator, seed: checked.seed },
       kind: input.kind, templates: input.kind === "blank" ? { [lang]: d.blank.code } : {}, reference: { lang: "javascript", code: d.reference },

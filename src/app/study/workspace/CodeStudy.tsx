@@ -150,6 +150,21 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
   /** A problem made before from the same address: open it, or make a new one anyway. */
   const [existing, setExisting] = useState<{ id: string; title: string; createdAt: string; count: number; from: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 진행 상황(11/16 사용자 "가져오는 과정 뭐하고 있는지 보이게"): 보낼 때 job 하나를 정하고, 서버가 쌓는 단계를 짧게 물어 읽는다.
+  const [job, setJob] = useState("");
+  const [steps, setSteps] = useState<Array<{ sec: number; text: string }>>([]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!job || !busy) return;
+    // 끝난 뒤에도 한 번 더 읽어 마지막 단계(실패한 곳 포함)까지 남긴다. 늦게 온 답이 새 job의 목록을 덮지 않게 job을 확인한다.
+    const read = async () => { try { const r = await fetch(`/api/code/progress/${job}`, { cache: "no-store" }); if (r.ok) { const j = await r.json() as { steps: Array<{ sec: number; text: string }> }; setSteps((old) => (jobNow.current === job ? j.steps : old)); } } catch { /* 다음에 */ } };
+    void read();
+    const t = window.setInterval(() => { void read(); setTick((x) => x + 1); }, 800);
+    return () => { window.clearInterval(t); void read(); };
+  }, [job, busy]);
+  const startedAt = useRef(0);
+  const jobNow = useRef("");
+  useEffect(() => { jobNow.current = job; }, [job]);
   if (!open) return <div className="row"><button className="btn" onClick={() => setOpen(true)}>+ 문제 가져오기 (AI)</button></div>;
   const done = (id: string) => { setOpen(false); setText(""); setImage(null); setPlan(null); setExisting(null); onMade(id); };
   const takeImage = async (file: Blob | null | undefined) => {
@@ -157,25 +172,29 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
     setError("");
     try { setImage(await shrinkImage(file)); } catch (e) { setError(errorText(e)); }
   };
-  const make = async (args: { from?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; again?: boolean }) => {
+  const make = async (args: { from?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; again?: boolean; job?: string }) => {
     setBusy("make"); setError(""); setExisting(null);
     try {
       const lang = args.kind === "blank" ? args.lang ?? storedLang() : undefined;
       const made = await call<{ problem?: { id: string }; existing?: { id: string; title: string; createdAt: string; count: number } }>("/api/code/make",
-        { ...(args.from ? { from: args.from } : {}), ...(args.lesson ? { lesson: args.lesson } : {}), kind: args.kind, ...(lang ? { lang } : {}), ...(args.again ? { again: true } : {}) });
+        { job: args.job ?? jobRef(), ...(args.from ? { from: args.from } : {}), ...(args.lesson ? { lesson: args.lesson } : {}), kind: args.kind, ...(lang ? { lang } : {}), ...(args.again ? { again: true } : {}) });
       if (made.existing) setExisting({ ...made.existing, from: args.from ?? "" }); else if (made.problem) done(made.problem.id);
     } catch (e) { setError(errorText(e)); } finally { setBusy(""); }
   };
   const send = async () => {
     if (busy) return;
+    const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    setJob(id); setSteps([]); startedAt.current = Date.now();
     setBusy("route"); setError(""); setPlan(null); setExisting(null);
     let got: Intake | null = null;
-    try { got = await call<Intake>("/api/code/intake", { text, ...(image ? { image } : {}) }); setPlan(got); }
+    try { got = await call<Intake>("/api/code/intake", { job: id, text, ...(image ? { image } : {}) }); setPlan(got); }
     catch (e) { setError(errorText(e)); }
     finally { setBusy(""); }
     if (!got || got.route === "find") return;
-    await make({ ...(got.from ? { from: got.from } : {}), ...(got.lesson ? { lesson: got.lesson } : {}), kind: got.kind, ...(got.lang ? { lang: got.lang } : {}) });
+    await make({ job: id, ...(got.from ? { from: got.from } : {}), ...(got.lesson ? { lesson: got.lesson } : {}), kind: got.kind, ...(got.lang ? { lang: got.lang } : {}) });
   };
+  /** 같은 진행 목록에 이어 적는다(보내기 → 만들기). 후보를 고를 때처럼 새로 시작하면 새 job. */
+  function jobRef() { if (job) return job; const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; setJob(id); startedAt.current = Date.now(); return id; }
   const pick = async (c: Found) => { setPicking(c.url); await make({ from: c.number || c.url, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); setPicking(""); };
   const working = busy === "route" ? (image ? "캡처를 읽는 중… (10~30초)" : "무엇을 할지 보는 중… (5~30초)")
     : busy === "make" ? (plan?.route === "named" ? "문제를 가져오는 중… (백준 문제는 몇 초면 열려요)" : "문제를 만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "";
@@ -196,6 +215,13 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
         <button className="btn primary small" disabled={Boolean(busy) || Boolean(picking)} onClick={() => void send()}>{busy ? working : plan ? "다시 보내기" : "보내기"}</button>
         <button className="btn ghost small" disabled={Boolean(busy)} onClick={() => setOpen(false)}>닫기</button>
       </div>
+      {steps.length || busy ? (
+        <ol className="small" style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 2 }} aria-live="polite">
+          {steps.map((st, i) => <li key={i} style={{ color: i === steps.length - 1 && busy ? "var(--ink)" : "var(--muted)" }}>
+            {i === steps.length - 1 && busy ? "⏳ " : i === steps.length - 1 && error ? "✗ " : "✓ "}{st.text} <span className="muted">· {st.sec}초</span></li>)}
+          {busy && !steps.length ? <li className="muted">⏳ 시작하는 중…</li> : null}
+          {busy && startedAt.current ? <li className="muted" style={{ listStyle: "none", marginLeft: -18 }} data-tick={tick}>지금까지 {Math.round((Date.now() - startedAt.current) / 1000)}초</li> : null}
+        </ol>) : null}
       {plan?.say ? <p className="small">{plan.say}</p> : null}
       {plan?.assumed?.length ? <div className="small muted">캡처에서 안 보여 채운 조건:<ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{plan.assumed.map((a, i) => <li key={i}>{a}</li>)}</ul></div> : null}
       {plan?.route === "find" ? (plan.candidates?.length ? (
