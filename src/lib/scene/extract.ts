@@ -6,6 +6,7 @@ import { askJson } from "../assist/model.ts";
 import { langOf, runAll } from "./exec.ts";
 import { doseOf, firstState, scopeOf } from "./ladder.ts";
 import { EXTRACT_SCHEMA, EXTRACT_SYSTEM, type ExtractReply } from "./prompts.ts";
+import { followGaps } from "./follow.ts";
 import { changeGaps, newId, readGaps } from "./store.ts";
 import { GAP_KINDS, LAYER, STATEMENT_CAP, type Evidence, type Gap, type GapKind } from "./types.ts";
 
@@ -96,6 +97,8 @@ export async function extractGaps(problemId: string, opts: { ask?: Ask; force?: 
   const before = (await readGaps()).filter((g) => g.origin.problemId === problemId);
   if (before.length && !opts.force) return before;
   const rec = opts.rec ?? await recordOf(problemId);
+  // 11/16 사용자 "그거로 다 바꿔서": 생각 따라가기(follow.ts)로 뽑고 첫 장면까지 만든다. 옛 목록 뽑기는 RECALLER_SCENE_EXTRACT=list 일 때만.
+  if (process.env.RECALLER_SCENE_EXTRACT !== "list") return followGaps(problemId, rec, opts.ask ?? defaultAsk);
   const lang = rec.subs.at(-1)?.lang ?? "python";
   const reply = await (opts.ask ?? defaultAsk)<ExtractReply>("scene:extract", EXTRACT_SYSTEM, await extractUser(rec), EXTRACT_SCHEMA);
   const made: Gap[] = [];

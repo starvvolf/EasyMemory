@@ -16,6 +16,7 @@ import "./library.css";
 import { ReviewProgress, useReviewStream } from "./ReviewProgress";
 import { Ic, MdReviewView, RvRich } from "./ReviewView";
 import { GapList } from "./scene/Scene";
+import { PracticeNotes } from "./scene/PracticeNotes";
 
 type Branch = "material" | "code" | "project";
 const BRANCHES: Array<[Branch, string]> = [["material", "자료"], ["code", "알고리즘"], ["project", "실습"]];
@@ -343,8 +344,8 @@ function RunView({ e }: { e: Entry }) {
   const oldOnes = recs.filter((r) => r.review?.v !== 2 && r.review?.v !== 3).length;
   return <>
     {head}
-    {/* 상황 재현(11/15 [경계] A): 이 실습에서 놓친 생각과 지금 상태 */}
-    {e.runId ? <GapList key={`run-${e.runId}`} runId={e.runId} /> : null}
+    {/* 11/16 사용자: 실습은 상황 재현 대신 배운 것을 층(기본기 → A → B)으로 정리하고, 어려운 개념만 플래시카드로 */}
+    {e.runId ? <PracticeNotes key={`notes-${e.runId}`} runId={e.runId} /> : null}
     <section className="rp-wrong rp-review"><p className="eyebrow">실습 정리</p>
       <p className="rp-facts">{[`목표 ${scenes.filter((c) => c.goal).length}개 · 마침 ${done}`, sup ? `보충 ${sup}번` : "보충 없음", `튜터에게 ${evs.filter((x) => x.kind === "me").length}번 말함`, errs ? `실행 오류 ${errs}번` : "", fixed ? `튜터가 고쳐 줌 ${fixed}번` : "", ms.length ? `막힌 순간 ${ms.length}` : "", span ? `${span}분` : ""].filter(Boolean).map((x) => <span key={x}>{x}</span>)}</p>
       {d.demo ? <div className="pg-demo"><p className="pg-dh">이 실습에서 만든 것 <span className="small muted">— 마지막으로 돌려 본 화면</span></p><div className="pg-code out"><span className="pg-cl">$ {d.demo.command}</span><pre>{d.demo.out}</pre></div></div> : null}

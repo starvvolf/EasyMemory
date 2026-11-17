@@ -44,6 +44,7 @@ export type Gap = {
   /** 학습자가 [이건 아는 거였어요]로 뺀 빈틈(뽑기가 틀렸을 수 있음). 복습에 안 나온다. */ dismissed?: boolean;
   marks?: GapMark[];
   /** 기억 저장소 항목 id(빈틈은 기억 저장소의 항목으로도 남는다) */ knowledgeId?: string;
+  /** 생각 따라가기의 목차(11/16): 이 빈틈이 든 파트 · 작은 묶음, 목차 순서 */ unit?: { part: string; sub: string; order: number };
 };
 
 /** 형식 (설계 3번). 1~12 공통, 13~17 실습 전용. */
