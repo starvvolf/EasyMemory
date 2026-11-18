@@ -19,7 +19,7 @@ type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; he
 type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string; preparing?: boolean;
   level?: { self: SelfLevel; known?: { site: string; rating: string } } };
 type TestCase = { input: string; output: string };
-type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
+type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; compare?: { mode?: "exact" | "approx" | "checker"; eps?: number }; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number; memoryLimitMb?: number;
   examplesFrom?: "source" | "made"; constraints?: string;
   /** 바로 열기: the hidden tests are still being made (or failed) */ preparing?: { since: string; error?: string };
@@ -72,7 +72,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
       </header>
       <Calibrated />
       {error ? <p className="ws-err">{error}</p> : null}
-      <MakeProblem langs={langs} onMade={(id) => { void load(); setCurrent(id); }} />
+      <MakeProblem langs={langs} onMade={(id) => { void load(); setCurrent(id); }} onAdded={() => void load()} />
       <section className="panel stack">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <b>문제 {list.length}</b>
@@ -139,10 +139,24 @@ async function shrinkImage(file: Blob): Promise<string> {
 }
 // 문제 받기(11/16 사용자 "입력창 하나로 가고 각 입력에 따라서 AI가 라우팅"): 캡처 · 붙여 넣은 글 · 문제 이름/번호 · 풀고 싶은 문제를 한 칸에서 받는다.
 // AI 1번(/api/code/intake)이 길을 고르고, 만들기는 지금의 /api/code/make(from · lesson)로 한다. 내장 문제집은 쓰지 않는다.
-function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => void }) {
+/** 여러 문제 한 번에(11/18 사용자 "onoff로 문제 여러 개, 입력 따로 받아서 최대 10개, < > 버튼으로 넘기면서"): 칸 하나가 문제 하나. */
+type Slot = { text: string; image: string | null; status: "" | "busy" | "ok" | "fail" | "pick"; note?: string; id?: string; title?: string };
+const MAX_SLOTS = 10;
+const emptySlot = (): Slot => ({ text: "", image: null, status: "" });
+const newJob = () => `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+function MakeProblem({ onMade, onAdded }: { langs: LangInfo[]; onMade: (id: string) => void; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [image, setImage] = useState<string | null>(null);
+  const [one, setOne] = useState("");
+  const [oneImage, setOneImage] = useState<string | null>(null);
+  const [multi, setMulti] = useState(false);
+  const [slots, setSlots] = useState<Slot[]>([emptySlot()]);
+  const [cur, setCur] = useState(0);
+  // 여러 문제 모드에서는 입력 칸이 지금 보고 있는 칸(cur)의 글 · 캡처를 고친다. 나머지 코드는 그대로 text · image를 쓴다.
+  const text = multi ? slots[cur]?.text ?? "" : one;
+  const image = multi ? slots[cur]?.image ?? null : oneImage;
+  const patchSlot = (i: number, p: Partial<Slot>) => setSlots((old) => old.map((x, k) => (k === i ? { ...x, ...p } : x)));
+  const setText = (t: string) => (multi ? patchSlot(cur, { text: t, ...(slots[cur]?.status === "ok" ? {} : { status: "" as const, note: "" }) }) : setOne(t));
+  const setImage = (img: string | null) => (multi ? patchSlot(cur, { image: img }) : setOneImage(img));
   const [busy, setBusy] = useState<"" | "route" | "make">("");
   const [error, setError] = useState("");
   const [plan, setPlan] = useState<Intake | null>(null);
@@ -170,7 +184,7 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
   const jobNow = useRef("");
   useEffect(() => { jobNow.current = job; }, [job]);
   if (!open) return <div className="row"><button className="btn" onClick={() => setOpen(true)}>+ 문제 가져오기 (AI)</button></div>;
-  const done = (id: string) => { setOpen(false); setText(""); setImage(null); setPlan(null); setExisting(null); onMade(id); };
+  const done = (id: string) => { setOpen(false); setOne(""); setOneImage(null); setPlan(null); setExisting(null); if (multi) { setMulti(false); setSlots([emptySlot()]); setCur(0); } onMade(id); };
   const takeImage = async (file: Blob | null | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
     setError("");
@@ -190,7 +204,7 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
     if (busy) return;
     const text_ = override ?? text;
     setUnread(null); setAsk("");
-    const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = newJob();
     setJob(id); setSteps([]); startedAt.current = Date.now();
     setBusy("route"); setError(""); setPlan(null); setExisting(null);
     let got: Intake | null = null;
@@ -200,8 +214,44 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
     if (!got || got.route === "find") return;
     await make({ job: id, hint: text_.trim().slice(0, 200), ...(got.from ? { from: got.from } : {}), ...(got.lesson ? { lesson: got.lesson } : {}), kind: got.kind, ...(got.lang ? { lang: got.lang } : {}) });
   };
+  /** 여러 문제: 내용이 있는 칸을 하나씩 차례로(동시에 돌리면 ChatGPT 사용량 제한에 걸리기 쉬움). 고를 후보가 나온 칸은 건너뛰고 알려 준다. */
+  const sendAll = async () => {
+    if (busy) return;
+    const todo = slots.map((x, i) => ({ x, i })).filter(({ x }) => (x.text.trim() || x.image) && x.status !== "ok");
+    if (!todo.length) { setError("내용이 있는 칸이 없어요."); return; }
+    setError(""); setPlan(null); setExisting(null); setUnread(null); setAsk("");
+    let added = 0;
+    for (const { x, i } of todo) {
+      setCur(i); patchSlot(i, { status: "busy", note: "" });
+      const id = newJob();
+      setJob(id); setSteps([]); startedAt.current = Date.now(); setBusy("make");
+      try {
+        const got = await call<Intake>("/api/code/intake", { job: id, text: x.text, ...(x.image ? { image: x.image } : {}) });
+        if (got.route === "find") {
+          patchSlot(i, { status: "pick", note: got.candidates?.length ? `하나로 정해지지 않았어요. 후보: ${got.candidates.slice(0, 3).map((c) => c.title).join(" · ")} — 번호나 이름을 정확히 적어 다시 보내 주세요.` : got.say || "그 문제를 찾지 못했어요." });
+          continue;
+        }
+        const lang = got.kind === "blank" ? got.lang ?? storedLang() : undefined;
+        const made = await call<{ problem?: { id: string; title?: string }; existing?: { id: string; title: string }; unreadable?: { reason: string } }>("/api/code/make",
+          { job: id, hint: x.text.trim().slice(0, 200), ...(got.from ? { from: got.from } : {}), ...(got.lesson ? { lesson: got.lesson } : {}), kind: got.kind, ...(lang ? { lang } : {}) });
+        if (made.unreadable) patchSlot(i, { status: "fail", note: `${made.unreadable.reason} 문제 글을 가져오지 못했어요. 캡처나 문제 글을 넣어 다시 보내 주세요.` });
+        else if (made.existing) patchSlot(i, { status: "ok", id: made.existing.id, title: made.existing.title, note: "이미 가져온 문제예요" });
+        else if (made.problem) { added++; patchSlot(i, { status: "ok", id: made.problem.id, title: made.problem.title ?? "", note: "" }); onAdded(); }
+      } catch (e) { patchSlot(i, { status: "fail", note: errorText(e) }); }
+    }
+    setBusy("");
+    if (added) onAdded();
+  };
+  const addSlot = () => { if (slots.length >= MAX_SLOTS) return; setSlots((old) => [...old, emptySlot()]); setCur(slots.length); boxRef.current?.focus(); };
+  const dropSlot = () => { if (slots.length <= 1) { setSlots([emptySlot()]); return; } setSlots((old) => old.filter((_, k) => k !== cur)); setCur((c) => Math.max(0, Math.min(c, slots.length - 2))); };
+  const toggleMulti = () => {
+    if (busy) return;
+    if (!multi) { setSlots([{ ...emptySlot(), text: one, image: oneImage }]); setCur(0); setPlan(null); setUnread(null); setExisting(null); }
+    else { setOne(slots[cur]?.text ?? ""); setOneImage(slots[cur]?.image ?? null); }
+    setMulti(!multi);
+  };
   /** 같은 진행 목록에 이어 적는다(보내기 → 만들기). 후보를 고를 때처럼 새로 시작하면 새 job. */
-  function jobRef() { if (job) return job; const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; setJob(id); startedAt.current = Date.now(); return id; }
+  function jobRef() { if (job) return job; const id = newJob(); setJob(id); startedAt.current = Date.now(); return id; }
   /** 선택지(11/18): 직접 넣기 — 캡처 · 문제 글 · 블로그 주소 */
   const putIn = () => { setUnread(null); setText(""); setPlan(null); setAsk("그 문제를 캡처해서 여기에 Ctrl+V(또는 [캡처 넣기]) 하거나, 문제 글이나 그 문제를 옮겨 적은 블로그 주소를 붙여 넣고 보내 주세요."); boxRef.current?.focus(); };
   /** 선택지(11/18): 그 문제 이름 · 설명을 주제로 AI가 연습 문제를 새로 만든다(원문이 아니라 비슷한 새 문제). */
@@ -211,10 +261,32 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
     : busy === "make" ? (plan?.route === "named" ? "문제를 가져오는 중… (백준 문제는 몇 초면 열려요)" : "문제를 만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "";
   return (
     <section className="panel stack">
-      <b>문제 가져오기</b>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b>문제 가져오기</b>
+        <label className="small row" style={{ gap: 6, cursor: busy ? "default" : "pointer" }}>
+          <input type="checkbox" checked={multi} disabled={Boolean(busy)} onChange={toggleMulti} /> 여러 문제 한 번에 (최대 {MAX_SLOTS}개)
+        </label>
+      </div>
+      {multi ? (
+        <div className="row small" style={{ gap: 6 }}>
+          <button className="btn ghost small" aria-label="앞 칸" disabled={cur === 0} onClick={() => setCur(cur - 1)}>&lt;</button>
+          <b>{cur + 1} / {slots.length}</b>
+          <button className="btn ghost small" aria-label="다음 칸" disabled={cur >= slots.length - 1} onClick={() => setCur(cur + 1)}>&gt;</button>
+          <button className="btn small" disabled={Boolean(busy) || slots.length >= MAX_SLOTS} onClick={addSlot}>+ 칸 더하기</button>
+          <button className="btn ghost small" disabled={Boolean(busy)} onClick={dropSlot}>이 칸 빼기</button>
+          <span className="muted">
+            {slots.map((x, k) => <span key={k} title={x.title || x.text.slice(0, 40)} style={{ cursor: "pointer", marginRight: 2 }} onClick={() => setCur(k)}>
+              {x.status === "ok" ? "✓" : x.status === "fail" ? "✗" : x.status === "pick" ? "?" : x.status === "busy" ? "⏳" : x.text.trim() || x.image ? "●" : "○"}</span>)}
+          </span>
+        </div>) : null}
+      {multi && slots[cur]?.status && slots[cur].status !== "busy" ? (
+        <div className="row small">
+          <span>{slots[cur].status === "ok" ? <>✓ <b>{slots[cur].title || "만든 문제"}</b>{slots[cur].note ? ` (${slots[cur].note})` : ""}</> : `${slots[cur].status === "pick" ? "?" : "✗"} ${slots[cur].note ?? ""}`}</span>
+          {slots[cur].status === "ok" && slots[cur].id ? <button className="btn primary small" onClick={() => done(slots[cur].id!)}>열기</button> : null}
+        </div>) : null}
       <p className="small muted">한 칸에 적어요. 백준 번호 · 문제 이름이면 그 문제를, 문제 글을 붙여 넣거나 캡처를 넣으면 그걸로, 풀고 싶은 걸 말하면(비워도 돼요) 지금 수준에 맞는 문제를 찾아 와요. &quot;빈칸으로&quot;, &quot;C++로&quot;처럼 덧붙여도 돼요.</p>
       <textarea ref={boxRef} className="ws-input" rows={text.includes("\n") ? 6 : 2} value={text} onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !text.includes("\n")) { e.preventDefault(); void send(); } }}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !text.includes("\n")) { e.preventDefault(); if (!multi) void send(); else if (cur < slots.length - 1) setCur(cur + 1); else addSlot(); } }}
         onPaste={(e) => { const f = [...e.clipboardData.items].find((i) => i.type.startsWith("image/"))?.getAsFile(); if (f) { e.preventDefault(); void takeImage(f); } }}
         onDragOver={(e) => e.preventDefault()} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) { e.preventDefault(); void takeImage(f); } }}
         placeholder="예: 7785 · 백준 토마토 · BFS 쉬운 거 · 문제 글 붙여 넣기 · 캡처는 Ctrl+V나 끌어 놓기" />
@@ -223,7 +295,9 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
       <div className="row">
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void takeImage(e.target.files?.[0]); e.target.value = ""; }} />
         <button className="btn small" disabled={Boolean(busy)} onClick={() => fileRef.current?.click()}>캡처 넣기</button>
-        <button className="btn primary small" disabled={Boolean(busy) || Boolean(picking)} onClick={() => void send()}>{busy ? working : plan ? "다시 보내기" : "보내기"}</button>
+        {multi
+          ? <button className="btn primary small" disabled={Boolean(busy)} onClick={() => void sendAll()}>{busy ? `${cur + 1}번 칸 ${working || "하는 중…"}` : `모두 보내기 (${slots.filter((x) => (x.text.trim() || x.image) && x.status !== "ok").length}개)`}</button>
+          : <button className="btn primary small" disabled={Boolean(busy) || Boolean(picking)} onClick={() => void send()}>{busy ? working : plan ? "다시 보내기" : "보내기"}</button>}
         <button className="btn ghost small" disabled={Boolean(busy)} onClick={() => setOpen(false)}>닫기</button>
       </div>
       {steps.length || busy ? (
@@ -581,6 +655,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         ))}
         {problem.constraints ? <p className="small muted">제약: {problem.constraints.split("\n").join(" · ")}</p> : null}
         {problem.preparing ? null : <p className="small muted">숨은 테스트 {problem.hiddenTests}개{problem.check?.maxTests ? ` (최대 크기 ${problem.check.maxTests}개)` : ""} · 시간 제한 {problem.timeLimitMs / 1000}초 · 메모리 제한 {problem.memoryLimitMb ?? 256}MB
+          {problem.compare?.mode === "checker" ? " · 답이 여러 개인 문제: 예제와 다른 답이어도 맞으면 맞아요" : problem.compare?.mode === "approx" ? ` · 소수점 오차 ${problem.compare.eps ?? 0.000001}까지 맞아요` : ""}
           {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.by === "source" && problem.check.compared ? `, 단순 풀이와 작은 입력 ${problem.check.compared}개 일치` : ""}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
           {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>}

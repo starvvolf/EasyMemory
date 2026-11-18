@@ -11,6 +11,7 @@ const str = { type: "string" } as const;
 export const S = {
   str,
   int: { type: "integer" } as const,
+  num: { type: "number" } as const,
   arr: (items: unknown) => ({ type: "array", items }),
   obj: (properties: Record<string, unknown>) => ({ type: "object", additionalProperties: false, required: Object.keys(properties), properties }),
   oneOf: (...values: string[]) => ({ type: "string", enum: values }),

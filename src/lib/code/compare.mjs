@@ -15,7 +15,7 @@ const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 /**
  * @param {string} got
  * @param {string} want
- * @param {{ mode?: "exact" | "approx", eps?: number }} [how]
+ * @param {{ mode?: "exact" | "approx" | "checker", eps?: number, checker?: string }} [how]  checker: judged elsewhere (harness), treated as exact here
  * @returns {{ ok: true } | { ok: false, line: number, token?: number, want: string, got: string, why: string }}
  */
 export function compareOutput(got, want, how = {}) {
