@@ -7,10 +7,12 @@
 import { askJson, S } from "../assist/model.ts";
 import { findContext, pickCandidates, type Found } from "./find.ts";
 import { note } from "./progress.ts";
+import { problemFromBlogs } from "./source.ts";
 
 export type Route = "image" | "paste" | "named" | "find";
 export type IntakeLang = "python" | "javascript" | "cpp" | "csharp";
-export type Intake = { route: Route; say: string; kind: "full" | "blank"; lang?: IntakeLang; from?: string; lesson?: string; assumed?: string[]; candidates?: Found[] };
+export type Intake = { route: Route; say: string; kind: "full" | "blank"; lang?: IntakeLang; from?: string; lesson?: string; assumed?: string[]; candidates?: Found[];
+  /** 이름으로 가리킨 문제를 문제 사이트 · 블로그 어디서도 못 찾았을 때 그 말(화면이 다른 선택지를 함께 보인다, 11/18). */ missed?: string };
 
 export const INTAKE_SYSTEM = `너는 알고리즘 공부 앱의 "문제 받기" 창구다. 학습자가 입력창 하나에 적은 글(과 붙인 캡처 이미지)을 보고, 할 일을 하나 고르고 필요한 칸을 채운다.
 
@@ -77,7 +79,7 @@ export function settle(reply: Reply, input: { text: string; image?: string }, ha
   return { route: "find", ...base, candidates: candidates() };
 }
 
-export async function intake(input: { text: string; image?: string }, ask: IntakeAsk = defaultAsk): Promise<Intake> {
+export async function intake(input: { text: string; image?: string }, ask: IntakeAsk = defaultAsk, blogs: (what: string) => ReturnType<typeof problemFromBlogs> = (w) => problemFromBlogs(w)): Promise<Intake> {
   const c = await findContext();
   const text = input.text.trim();
   const user = [
@@ -91,7 +93,13 @@ export async function intake(input: { text: string; image?: string }, ask: Intak
   ].filter(Boolean).join("\n\n");
   note(input.image ? "캡처를 AI가 읽고 있어요 (문제 옮겨 적기 · 안 보인 조건 채우기)" : text ? "AI가 무엇을 할지 보고 있어요 (필요하면 웹 검색)" : "AI가 지금 수준에 맞는 문제를 웹에서 찾고 있어요");
   const reply = await ask(INTAKE_SYSTEM, user, input.image ? [{ label: "학습자가 붙인 캡처", dataUrl: input.image }] : []);
-  const out = settle(reply, input, c.have);
+  let out = settle(reply, input, c.have);
+  // 11/18 사용자: 이름으로 가리킨 문제를 문제 사이트에서 못 찾으면 블로그에서 → 그래도 없으면 비슷한 후보와 다른 선택지
+  if (reply.route === "named" && out.route === "find" && text) {
+    const blog = await blogs(text).catch(() => null);
+    if (blog) out = { route: "named", say: "문제 사이트에서는 못 찾아서, 블로그 글에서 문제를 가져올게요.", kind: out.kind, ...(out.lang ? { lang: out.lang } : {}), from: blog.url };
+    else out = { ...out, say: "그 문제를 문제 사이트 · 블로그에서 찾지 못했어요.", missed: text.slice(0, 200) };
+  }
   note(out.route === "image" ? `캡처에서 문제를 옮겨 적었어요${out.assumed?.length ? ` (안 보인 조건 ${out.assumed.length}개 채움)` : ""}` : out.route === "paste" ? "붙여 넣은 글로 만들게요"
     : out.route === "named" ? `가져올 문제: ${out.from}` : `후보 ${out.candidates?.length ?? 0}개를 찾았어요`);
   return out;

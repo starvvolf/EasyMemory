@@ -16,7 +16,7 @@ import { keepTalk } from "@/lib/code/tutor/talk";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
-import { resolveSource, UnreadableSource, type Resolved } from "@/lib/code/source";
+import { problemFromBlogs, resolveSource, UnreadableSource, type Resolved } from "@/lib/code/source";
 import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
 import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
@@ -146,6 +146,8 @@ async function inner(request: Request, context: RouteContext) {
         sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional(),
         /** 주소로 가져오기: a blog or problem page address, or a Baekjoon number (src/lib/code/source.ts). */
         from: z.string().max(2000).optional(),
+        /** 그 문제를 알 수 있는 말(이름 · 학습자가 적은 글): 문제 사이트로 못 읽으면 이걸로 블로그를 찾는다(11/18). */
+        hint: z.string().max(300).optional(),
         /** Make it again even when a problem from the same address is there (otherwise that one is offered). */
         again: z.boolean().optional(),
         /** 실험: the draft's model for this request only (e.g. "gpt-5.6-luna"). */
@@ -156,11 +158,17 @@ async function inner(request: Request, context: RouteContext) {
         mutantsModel: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional(),
         /** Wait for the whole problem even when it could open at once (time measurements). */
         wait: z.boolean().optional(), job: z.string().regex(jobId).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
-      const { from, again, wait, job, ...rest } = b;
+      const { from, again, wait, job, hint, ...rest } = b;
       return json(await withProgress(job, async () => {
       let got: Awaited<ReturnType<typeof resolveSource>> | null = null;
       try { got = from?.trim() ? await resolveSource(from) : null; }
-      catch (e) { if (e instanceof UnreadableSource) { note(`글을 못 읽었어요: ${e.reason}`); return { unreadable: { reason: e.reason, from: from!.trim() } }; } throw e; }
+      catch (e) {
+        if (!(e instanceof UnreadableSource)) throw e;
+        note(`문제 사이트에서 못 읽었어요: ${e.reason}`);
+        // 11/18 사용자: 문제 사이트에 없으면 블로그에서 → 그래도 없으면 선택지
+        got = await problemFromBlogs([from!.trim(), hint?.trim()].filter(Boolean).join(" · ")).catch(() => null);
+        if (!got) return { unreadable: { reason: `${e.reason} 블로그에서도 문제 글을 찾지 못해서`, from: from!.trim() } };
+      }
       const existing = got && !again ? await findBySource(got.url, rest.kind) : null;
       if (existing) { note("이미 가져온 문제가 있어요"); return { existing }; }
       // 바로 열기: an imported original is shown at once (read it, run the examples); the hidden tests follow in the background.
