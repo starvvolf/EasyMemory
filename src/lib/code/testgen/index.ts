@@ -17,7 +17,7 @@ export type TestgenJob = {
   needCompared?: number;
   smallCount?: number; runMs?: number; seed?: number;
   /** How outputs are compared (compare.mjs); exact when left out. */
-  compare?: { mode?: "exact" | "approx"; eps?: number };
+  compare?: { mode?: "exact" | "approx" | "checker"; eps?: number; checker?: string };
 };
 export type Mutation = { killed: number; total: number; survived: string[]; added: number; maybeRight: string[] };
 export type TestgenResult =
@@ -45,10 +45,16 @@ export type RegenResult = { ok: true; items: Array<{ input: string; output?: str
 /** 저장하지 않은 큰 입력을 다시 만든다(regen() in harness.mjs). */
 export function runRegen(job: RegenJob): Promise<RegenResult> { return runHarness(job) as unknown as Promise<RegenResult>; }
 
+export type JudgeOutputsResult = { ok: true; results: Array<{ ok: true } | { ok: false; why: string }> } | { ok: false; reason: string };
+/** 답이 여러 개인 문제(11/18): the learner's outputs, judged by the problem's checker in the separate process (judgeOutputs()). */
+export function runJudgeOutputs(checker: string, items: Array<{ input: string; got: string; want: string }>): Promise<JudgeOutputsResult> {
+  return runHarness({ judgeOutputs: { checker, items } }) as unknown as Promise<JudgeOutputsResult>;
+}
+
 /** Runs one job in its own process. Only what Node needs to start is passed on: no keys, no tokens, no app settings. */
 export function runTestgen(job: TestgenJob): Promise<TestgenResult> { return runHarness(job) as Promise<TestgenResult>; }
 
-function runHarness(job: TestgenJob | VerifyJob | RegenJob | { checkInputs: { generator: string; inputs: string[] } }): Promise<TestgenResult | VerifyResult> {
+function runHarness(job: TestgenJob | VerifyJob | RegenJob | { checkInputs: { generator: string; inputs: string[] } } | { judgeOutputs: { checker: string; items: Array<{ input: string; got: string; want: string }> } }): Promise<TestgenResult | VerifyResult> {
   return new Promise((resolve) => {
     const env = {} as NodeJS.ProcessEnv;
     for (const key of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR"]) if (process.env[key]) env[key] = process.env[key];

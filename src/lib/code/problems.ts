@@ -243,11 +243,13 @@ export async function readProblem(id: string): Promise<Problem> {
 }
 /** What the screen may see: no hidden tests, no reference, no generator. */
 export function publicProblem(problem: Problem | ProblemMeta) {
-  const { reference, testgen, ...rest } = problem;
+  const { reference, testgen, compare: how, ...rest } = problem;
   void testgen;
+  // 채점기 코드는 화면에 보내지 않는다(풀이의 실마리가 될 수 있음): 어떻게 채점하는지만.
+  const compare: CompareHow | undefined = how ? { mode: how.mode, ...(how.eps !== undefined ? { eps: how.eps } : {}) } : undefined;
   const hiddenTests = "tests" in problem ? problem.tests.length : problem.hiddenTests;
   if ("tests" in rest) delete (rest as { tests?: unknown }).tests;
-  return { ...rest, hiddenTests, hasReference: Boolean(reference), starters: Object.fromEntries(LANGS.map((lang) => [lang, problem.templates[lang] ?? STARTERS[lang]])) as Record<Lang, string> };
+  return { ...rest, ...(compare ? { compare } : {}), hiddenTests, hasReference: Boolean(reference), starters: Object.fromEntries(LANGS.map((lang) => [lang, problem.templates[lang] ?? STARTERS[lang]])) as Record<Lang, string> };
 }
 export async function saveProblem(input: Omit<Problem, "id" | "createdAt" | "knowledgeIds"> & { id?: string; knowledgeIds?: string[] }) {
   if (!input.title.trim()) throw new CodeError(400, "문제 제목이 비어 있어요.");

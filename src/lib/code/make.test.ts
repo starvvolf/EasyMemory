@@ -6,7 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { setFakeModelResponder, type ModelRequest } from "../ai/model.ts";
 import { makeProblem } from "../assist/code-ai.ts";
-import { readProblem } from "./problems.ts";
+import { publicProblem, readProblem } from "./problems.ts";
+import { judge } from "./run.ts";
 
 const READ = `const t = require("fs").readFileSync(0, "utf8").trim().split(/\\s+/).map(Number); const n = t[0];`;
 const SUM = `${READ} let s = 0; for (let i = 1; i <= n; i++) s += t[i]; console.log(s);`;
@@ -30,7 +31,7 @@ const GENERATOR = `module.exports = {
 };`;
 
 const draft = (over: Record<string, unknown>) => JSON.stringify({
-  title: "수의 합", statement: "N개의 수의 합을 구한다.", inputText: "첫 줄에 N, 둘째 줄에 수 N개", outputText: "합", answerKind: "one",
+  title: "수의 합", statement: "N개의 수의 합을 구한다.", inputText: "첫 줄에 N, 둘째 줄에 수 N개", outputText: "합", answerKind: "one", eps: 0, checker: "",
   constraints: "1 ≤ N ≤ 1000\n-100 ≤ A_i ≤ 100", timeLimitMs: 0,
   sourceExamples: [], exampleInputs: ["2\n5 7\n"], generator: GENERATOR, reference: SUM, brute: SUM_BRUTE, mutants: [],
   knowledge: ["누적 합"], folder: "알고리즘/합", blank: { code: "", filled: "" }, ...over,
@@ -129,12 +130,46 @@ test("a person's solution must print the same as the reference on every test; wh
     await assert.rejects(makeProblem({ lesson: PASTED, kind: "full", human: wrongHuman }), /사람이 쓴 정답 코드와 모범 풀이가 다름/);
   }));
 
-test("a problem with more than one right answer is refused at once (not yet gradable)", () => withFake(
-  [draft({ answerKind: "many" })],
+// 11/18 (사용자, 백준 2566): 답이 여러 개인 문제 — 최댓값의 위치는 여러 곳일 수 있다. 모범 풀이는 첫 위치, 단순 풀이는 마지막
+// 위치를 내서 글자로는 다르지만, 채점기가 둘 다 맞다고 하면 저장된다.
+const MAX_FIRST = `${READ} let k = 1; for (let i = 2; i <= n; i++) if (t[i] > t[k]) k = i; console.log(k);`;
+const MAX_LAST = `${READ} let k = 1; for (let i = 1; i <= n; i++) if (t[i] >= t[k]) k = i; console.log(k);`;
+const MAX_CHECKER = `module.exports = { check(input, output, answer) {
+  const t = input.trim().split(/\\s+/).map(Number); const n = t[0]; const a = t.slice(1, n + 1);
+  if (!/^\\d+$/.test(output.trim())) return "위치 하나를 출력해야 해요";
+  const k = Number(output.trim());
+  if (k < 1 || k > n) return "1부터 N 사이가 아니에요";
+  return a[k - 1] === Math.max(...a) || "그 위치의 값이 최댓값이 아니에요";
+} };`;
+const ANY_CHECKER = `module.exports = { check(input, output) { return output.trim() !== "" || "빈 출력"; } };`;
+const maxDraft = (over: Record<string, unknown> = {}) => draft({ title: "최댓값의 위치", outputText: "최댓값이 있는 위치 하나 (여러 곳이면 아무 곳이나)", answerKind: "many",
+  reference: MAX_FIRST, brute: MAX_LAST, checker: MAX_CHECKER, ...over });
+
+test("more than one right answer: the draft's checker grades, after it accepts the reference and refuses spoiled answers", () => withFake(
+  [maxDraft({ checker: "" }), maxDraft({ checker: ANY_CHECKER }), maxDraft()],
   async (seen) => {
-    await assert.rejects(makeProblem({ topic: "아무 해나 출력", kind: "full" }), /아직 채점할 수 없어서/);
-    assert.equal(seen.length, 1);
-    assert.equal(await savedCount(), 0);
+    const made = await makeProblem({ topic: "최댓값 위치", kind: "full" });
+    assert.equal(seen.length, 3, "no checker, then a checker that accepts anything, are both sent back");
+    assert.match(seen[1].user, /checker\(채점기\)가 비어 있음/);
+    assert.match(seen[2].user, /모두 맞다고 함/);
+    const saved = await readProblem(made.id);
+    assert.equal(saved.compare?.mode, "checker");
+    const same = { timeLimitMs: 2000, compare: saved.compare };
+    const tests = [...saved.examples, ...saved.tests];
+    assert.equal((await judge("javascript", MAX_LAST, tests, same)).verdict, "AC", "another right position passes");
+    const wrong = await judge("javascript", `${READ} console.log(n);`, tests, { ...same, stopAtFirstFail: true });
+    assert.equal(wrong.verdict, "WA");
+    assert.equal(wrong.results.length, wrong.results.findIndex((r) => r.verdict !== "AC") + 1, "a submission stops at its first wrong answer");
+    assert.match(wrong.results.at(-1)!.diff ?? "", /최댓값이 아니에요|사이가 아니에요/);
+    assert.equal(publicProblem(saved).compare?.checker, undefined, "the checker's code is not sent to the screen");
+  }));
+
+test("a real-number answer is graded with its allowed error", () => withFake(
+  [draft({ answerKind: "approx", eps: 0.001 })],
+  async () => {
+    const made = await makeProblem({ topic: "합", kind: "full" });
+    const saved = await readProblem(made.id);
+    assert.deepEqual(saved.compare, { mode: "approx", eps: 0.001 });
   }));
 
 test("faulty solutions are scored, not a gate: the problem is saved with how many of them the tests caught", () => withFake(

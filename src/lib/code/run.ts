@@ -8,6 +8,7 @@ import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises
 import os from "node:os";
 import path from "node:path";
 import { compareOutput, normalizeOutput } from "./compare.mjs";
+import { runJudgeOutputs } from "./testgen/index.ts";
 
 export { normalizeOutput };
 
@@ -244,7 +245,9 @@ export function effectiveUsage(u: { cpuMs: number; peakKb: number }, lang: Lang,
 }
 export const DEFAULT_MEMORY_MB = 256;
 
-export type CompareHow = { mode?: "exact" | "approx"; eps?: number };
+/** exact · approx (compare.mjs), or "checker" (11/18, 답이 여러 개): the problem's own checker program decides, in the
+ *  test maker's separate process (testgen/harness.mjs judgeOutputs) — it is AI-written code, so it never runs in the app. */
+export type CompareHow = { mode?: "exact" | "approx" | "checker"; eps?: number; checker?: string };
 const clipText = (text: string, n = 4000) => text.length > n ? `${text.slice(0, n)}\n… (${text.length - n}자 더)` : text;
 
 export async function judge(lang: Lang, code: string, tests: TestCase[], options: { timeLimitMs?: number; memoryLimitMb?: number; stopAtFirstFail?: boolean; compare?: CompareHow; calibration?: Calibration } = {}): Promise<Judgement> {
@@ -256,6 +259,7 @@ export async function judge(lang: Lang, code: string, tests: TestCase[], options
     const limit = options.timeLimitMs ?? 2000, memory = options.memoryLimitMb ?? DEFAULT_MEMORY_MB;
     const hard = limitsFor(limit, memory, lang, options.calibration);
     let measured = true;
+    const pending: Array<{ at: number; input: string; got: string; want: string }> = [];
     for (const [index, test] of tests.entries()) {
       // 출력 상한(11/11 시험): 정답 출력 자체가 8MB에 가까운 문제(2751, 100만 줄)는 맞는 코드도 "출력이 너무 많아요"로 런타임 에러가 됐다.
       // 정답 출력의 두 배까지는 받는다(최소 8MB).
@@ -267,13 +271,25 @@ export async function judge(lang: Lang, code: string, tests: TestCase[], options
       const slow = u ? u.hit === "cpu" || out.timedOut || u.cpuMs > limit + Math.max(300, Math.round(limit * 0.3)) : out.timedOut || out.ms > limit;
       const memoryOut = Boolean(u && (u.hit === "mem" || (out.code !== 0 && out.usage!.peakKb >= hard.memMb * 1024 * 0.97)));
       const ran = !out.failedToStart && !slow && !memoryOut && !out.tooMuch && out.code === 0;
-      const same = ran ? compareOutput(out.stdout, test.output, options.compare) : null;
+      const byChecker = options.compare?.mode === "checker";
+      const same = ran && !byChecker ? compareOutput(out.stdout, test.output, options.compare) : ran ? { ok: true as const } : null;
       const verdict: Verdict = out.failedToStart ? "RE" : slow ? "TLE" : memoryOut ? "MLE" : !ran ? "RE" : same!.ok ? "AC" : "WA";
       const near = u && verdict !== "TLE" && verdict !== "MLE" ? (u.cpuMs > limit ? "time" as const : u.peakKb > memory * 1024 ? "memory" as const : undefined) : undefined;
       results.push({ index, verdict, ms: out.ms, input: clipText(test.input), expected: clipText(test.output), got: clipText(out.stdout),
         stderr: clipText(out.failedToStart ?? (out.tooMuch ? "출력이 너무 많아요 (8MB 넘음)." : out.stderr), 3000),
         ...(same && !same.ok ? { diff: same.why } : {}), ...(u ? { cpuMs: u.cpuMs, peakKb: u.peakKb } : {}), ...(near ? { near } : {}) });
+      if (byChecker && ran) pending.push({ at: results.length - 1, input: test.input, got: out.stdout, want: test.output });
       if (verdict !== "AC" && options.stopAtFirstFail) break;
+    }
+    // 답이 여러 개(11/18): the outputs that ran are judged together by the checker (one process for all of them), then a
+    // submission still stops at its first failure as before.
+    if (pending.length) {
+      const checked = await runJudgeOutputs(options.compare!.checker ?? "", pending.map(({ input, got, want }) => ({ input, got, want })));
+      pending.forEach((p, i) => {
+        const c = checked.ok ? checked.results[i] : { ok: false as const, why: `채점기를 돌리지 못했어요: ${checked.reason.slice(0, 200)}` };
+        if (!c?.ok) { results[p.at].verdict = "WA"; results[p.at].diff = c ? c.why : "채점 결과 없음"; }
+      });
+      if (options.stopAtFirstFail) { const first = results.findIndex((r) => r.verdict !== "AC"); if (first !== -1) results.splice(first + 1); }
     }
     const failed = results.find((r) => r.verdict !== "AC");
     return { verdict: failed?.verdict ?? "AC", passed: results.filter((r) => r.verdict === "AC").length, total: tests.length, results, compile: "", ms: Date.now() - started, measured };

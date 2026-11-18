@@ -81,10 +81,46 @@ const short = (t, n = 80) => { const one = String(t).replace(/\n/g, " ⏎ "); re
 // An empty output can be the answer ("nobody is left"); a reference that prints nothing on every test is caught below.
 const badRun = (r) => r.timedOut ? "시간 초과" : r.error ? `실행 중 에러 (${r.error})` : "";
 
+/* ---------- 출력 비교: exact · approx (compare.mjs), or the problem's own checker (2026-11-18, 답이 여러 개인 문제) ---------- */
+/** The checker module: module.exports = { check(input, output, answer) } → true, or a reason string. `answer` is one right
+ *  output (the reference's or the original example's); `output` is the one being judged. Both normalized. */
+function loadChecker(code) {
+  const script = compile(code, "checker");
+  if (script.error) return { error: script.error };
+  const holder = { exports: {} };
+  const context = vm.createContext({ module: holder, exports: holder.exports, console: { log() {} }, BigInt });
+  try { script.runInContext(context, { timeout: 5000 }); }
+  catch (e) { return { error: `채점기를 불러오지 못함: ${String(e.message).slice(0, 200)}` }; }
+  if (typeof holder.exports.check !== "function") return { error: "채점기는 module.exports = { check(input, output, answer) } 꼴이어야 함" };
+  const call = new vm.Script("__out = module.exports.check(__input, __output, __answer)");
+  return { check: (input, output, answer) => {
+    Object.assign(context, { __input: input, __output: output, __answer: answer, __out: undefined });
+    try { call.runInContext(context, { timeout: 5000 }); } catch (e) { return { ok: false, why: `채점기 에러: ${String(e && e.message || e).slice(0, 120)}` }; }
+    return context.__out === true ? { ok: true } : { ok: false, why: typeof context.__out === "string" && context.__out.trim() ? context.__out.slice(0, 200) : "채점기가 틀렸다고 판단" };
+  } };
+}
+/** (input, got, want) → { ok } | { ok: false, why }. With a checker, `want` is one right answer, not the only one. */
+function comparer(how) {
+  if (how?.mode !== "checker") return { judge: (_input, got, want) => compareOutput(got, want, how) };
+  const loaded = loadChecker(String(how.checker ?? ""));
+  if (loaded.error) return { error: loaded.error };
+  return { judge: (input, got, want) => loaded.check(input, norm(got), norm(want)) };
+}
+/** One right answer with one number changed: a checker that accepts every one of these checks nothing. */
+function spoil(output) {
+  const words = output.split(/(\s+)/);
+  const i = words.findIndex((w) => /^[+-]?\d+$/.test(w));
+  if (i === -1) return output.trim() ? output + " 0" : "1";
+  words[i] = String(BigInt(words[i]) + 7n);
+  return words.join("");
+}
+
 function main(job) {
   const runMs = job.runMs ?? 5000;
   const fail = (reason) => ({ ok: false, reason });
-  const same = (got, want) => compareOutput(got, want, job.compare).ok;
+  const cmp = comparer(job.compare);
+  if (cmp.error) return fail(cmp.error);
+  const same = (input, got, want) => cmp.judge(input, got, want).ok;
   const loaded = loadGenerator(job.generator);
   if (loaded.error) return fail(loaded.error);
   const { g } = loaded;
@@ -115,7 +151,7 @@ function main(job) {
     const r = run(reference, ex.input, runMs);
     const why = badRun(r);
     if (why) return fail(`예제 ${i + 1}번: 모범 풀이 ${why}`);
-    if (!same(r.stdout, ex.output)) return fail(`예제 ${i + 1}번: 기대 ${short(norm(ex.output))}, 모범 풀이 ${short(norm(r.stdout))}`);
+    { const c = cmp.judge(ex.input, r.stdout, ex.output); if (!c.ok) return fail(`예제 ${i + 1}번: 기대 ${short(norm(ex.output))}, 모범 풀이 ${short(norm(r.stdout))}${job.compare?.mode === "checker" ? ` (채점기: ${c.why})` : ""}`); }
     examples.push({ input: ex.input, output: norm(ex.output) });
   }
   for (const [i, input] of (job.exampleInputs ?? []).entries()) {
@@ -152,7 +188,7 @@ function main(job) {
     const slow = run(brute, s.input, BRUTE_MS);
     if (slow.timedOut) { bruteSlow++; continue; }
     if (badRun(slow)) continue;
-    if (!same(slow.stdout, fast.stdout)) return fail(`작은 입력 ${i + 1}번 (${s.kind}: ${short(s.input, 60)}): 단순 풀이 ${short(norm(slow.stdout))}, 모범 풀이 ${short(norm(fast.stdout))}`);
+    if (!same(s.input, slow.stdout, fast.stdout)) return fail(`작은 입력 ${i + 1}번 (${s.kind}: ${short(s.input, 60)}): 단순 풀이 ${short(norm(slow.stdout))}, 모범 풀이 ${short(norm(fast.stdout))}`);
     compared++;
   }
   if (job.needCompared && compared < job.needCompared) return fail(`단순 풀이로 확인된 작은 입력이 ${compared}개뿐 (${job.needCompared}개 이상 필요)`);
@@ -183,6 +219,19 @@ function main(job) {
   for (const s of picked) add({ input: s.input, output: smallOut.get(s.input), kind: s.kind, size: "small", refMs: 0, genSeed: s.seed });
   if (tests.length < 3) return fail(`숨은 테스트가 ${tests.length}개뿐 (생성기의 tests 계획을 늘려야 함)`);
 
+  // 3½. 채점기 확인 (답이 여러 개): it must accept the reference's own answers and refuse an empty output; and among
+  // answers with one number changed it must refuse some — one that accepts everything would grade nothing.
+  if (job.compare?.mode === "checker") {
+    let spoiledRefused = 0, spoiledTried = 0;
+    for (const t of [...examples, ...tests]) {
+      const own = cmp.judge(t.input, t.output, t.output);
+      if (!own.ok) return fail(`채점기가 모범 풀이의 답을 틀렸다고 함 (${own.why}): 입력 ${short(t.input, 60)}, 답 ${short(t.output)}`);
+      if (t.output.trim() && cmp.judge(t.input, "", t.output).ok) return fail(`채점기가 빈 출력을 맞다고 함: 입력 ${short(t.input, 60)}`);
+      if (spoiledTried < 20 && t.output.trim()) { spoiledTried++; if (!cmp.judge(t.input, spoil(t.output), t.output).ok) spoiledRefused++; }
+    }
+    if (spoiledTried && !spoiledRefused) return fail(`채점기가 숫자를 바꾼 틀린 답 ${spoiledTried}개를 모두 맞다고 함 (출력이 정말 맞는지 끝까지 확인해야 함)`);
+  }
+
   // 4. 결함 풀이: each must fail some test. One that passes everything is checked against the simple solution on the
   // small inputs: a difference means the tests missed it — that input joins the tests for good; no difference means it
   // may be right after all, and it is not counted.
@@ -194,13 +243,13 @@ function main(job) {
     for (const t of [...examples, ...tests]) {
       const limit = Math.max(1000, (t.refMs ?? 0) * 10);
       const r = run(script, t.input, limit);
-      if (r.timedOut || r.error || !same(r.stdout, t.output)) { killed = true; break; }
+      if (r.timedOut || r.error || !same(t.input, r.stdout, t.output)) { killed = true; break; }
     }
     if (killed) { mutation.total++; mutation.killed++; continue; }
     let found = null;
     if (brute) for (const s of small) {
       const r = run(script, s.input, runMs);
-      if (r.timedOut || r.error || !same(r.stdout, smallOut.get(s.input))) { found = s; break; }
+      if (r.timedOut || r.error || !same(s.input, r.stdout, smallOut.get(s.input))) { found = s; break; }
     }
     if (found) {
       mutation.total++; mutation.killed++;
@@ -229,7 +278,9 @@ function main(job) {
  */
 function verify(job) {
   const v = job.verify;
-  const same = (got, want) => compareOutput(got, want, job.compare).ok;
+  const cmp = comparer(job.compare);
+  if (cmp.error) return { ok: false, reason: cmp.error };
+  const same = (input, got, want) => cmp.judge(input, got, want).ok;
   const second = compile(v.code, "second");
   if (second.error) return { ok: true, status: "broken", agreed: 0, total: v.tests.length, unchecked: v.tests.length, secondWrong: 0, reason: second.error };
   const brute = v.brute ? compile(v.brute, "brute") : null;
@@ -237,11 +288,11 @@ function verify(job) {
   for (const [i, t] of v.tests.entries()) {
     const r = run(second, t.input, Math.max(2000, (t.refMs ?? 0) * 20));
     if (r.timedOut || r.error) { unchecked++; continue; } // a slow or crashing second solution says nothing about the answer
-    if (same(r.stdout, t.output)) { agreed++; continue; }
+    if (same(t.input, r.stdout, t.output)) { agreed++; continue; }
     const where = `${i + 1}번 테스트${t.kind ? ` (${t.kind}/${t.size})` : ""}`;
     const b = brute && !brute.error ? run(brute, t.input, 3000) : null;
     if (b && !b.timedOut && !b.error) {
-      if (same(b.stdout, t.output)) { secondWrong++; continue; }
+      if (same(t.input, b.stdout, t.output)) { secondWrong++; continue; }
       return { ok: false, reason: `${where}: 단순 풀이와 독립 풀이가 모두 ${short(norm(b.stdout))}인데 기대 출력은 ${short(norm(t.output))} (모범 풀이가 틀림)` };
     }
     return { ok: false, reason: `${where}: 모범 풀이 ${short(norm(t.output))}, 다른 호출에서 쓴 독립 풀이 ${short(norm(r.stdout))} — 큰 입력이라 단순 풀이로 가릴 수 없음 (어느 쪽이 맞는지 다시 확인)` };
@@ -286,11 +337,18 @@ function checkInputs(job) {
   return { ok: true, kept, refused };
 }
 
+/** 채점 (답이 여러 개인 문제, 2026-11-18): the learner's outputs, judged by the problem's checker in this process. */
+function judgeOutputs(job) {
+  const cmp = comparer({ mode: "checker", checker: job.checker });
+  if (cmp.error) return { ok: false, reason: cmp.error };
+  return { ok: true, results: job.items.map((it) => { const c = cmp.judge(it.input, it.got, it.want); return c.ok ? { ok: true } : { ok: false, why: c.why }; }) };
+}
+
 let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => { raw += c; });
 process.stdin.on("end", () => {
   let result;
-  try { const job = JSON.parse(raw); result = job.verify ? verify(job) : job.checkInputs ? checkInputs(job.checkInputs) : job.regen ? regen(job.regen) : main(job); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
+  try { const job = JSON.parse(raw); result = job.verify ? verify(job) : job.judgeOutputs ? judgeOutputs(job.judgeOutputs) : job.checkInputs ? checkInputs(job.checkInputs) : job.regen ? regen(job.regen) : main(job); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
   process.stdout.write(JSON.stringify(result));
 });
