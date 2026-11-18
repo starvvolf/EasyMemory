@@ -7,11 +7,12 @@
 //  - A page that is blocked, gone or empty is tried once more from the Internet Archive.
 // Nothing here is saved to the public repository: the text goes to the problem maker, which keeps it in the data folder.
 import { archivedBojProblem, archivedUrl, decodeEntities, htmlToText, type Fetcher, type Original } from "./archive.ts";
+import { askJson, S } from "../assist/model.ts";
 import { CodeError } from "./problems.ts";
 import { note } from "./progress.ts";
 
 export type Page = { url: string; title: string; text: string; links: string[] };
-export type Resolved = { lesson: string; title: string; url: string; via: "boj-archive" | "page" | "page-archive"; boj?: string;
+export type Resolved = { lesson: string; title: string; url: string; via: "boj-archive" | "page" | "page-archive" | "blog"; boj?: string;
   /** The archived Baekjoon original, when there is one: the independent solution can start from it at once. */ original?: Original };
 
 const PAGE_TEXT_CAP = 30_000;
@@ -98,4 +99,46 @@ export async function resolveSource(input: string, fetcher: Fetcher = fetch): Pr
     if (original) return { lesson: `${lessonOf(original, number)}\n\n[참고: 이 문제를 다룬 글 ${text}]\n${page.text.slice(0, 8000)}`, title: `BOJ ${number} ${original.title}`, url: original.url, via: "boj-archive", boj: number, original };
   }
   return { lesson: `[가져온 글] ${page.title}\n${text}\n\n${page.text}`, title: page.title || text, url: text, via };
+}
+
+// 블로그에서 문제 글 찾기 (11/18 사용자 "백준이나 그런 사이트에서 찾았는데 없으면 블로그에서 찾아서 가져오게 해, 그래도 없으면 다른 선택지"):
+// 문제 사이트(백준 원문 · 문제 페이지 · 아카이브)로 못 읽었을 때만 AI 웹 검색 1번으로 그 문제를 옮겨 적은 블로그 글 주소를 받고,
+// 코드가 차례로 열어 입력 · 출력이 들어 있는 첫 글을 쓴다. 찾은 글은 데이터 폴더에만 남는다(공개 저장소에 올리지 않음).
+export const BLOG_SYSTEM = `알고리즘 문제 하나의 원문(문제 설명 · 입력 · 출력 · 예제)을 옮겨 적은 블로그 글을 웹 검색으로 찾는다.
+- 실제로 있는 글 주소만 적는다. 지어내지 않는다.
+- 문제 사이트 자체(acmicpc.net, programmers.co.kr, codeforces.com 등)는 빼고, 블로그 · 풀이 글(티스토리, velog, 네이버 블로그, GitHub 등)만.
+- 문제 설명 · 입력 · 출력 · 예제를 그대로 옮겨 적었을 가능성이 높은 글부터, 최대 5개.
+- 같은 문제가 아닌 글(비슷한 다른 문제)은 넣지 않는다.`;
+const BLOG_SCHEMA = S.obj({ posts: S.arr(S.obj({ url: S.str, title: S.str })) });
+export type BlogAsk = (system: string, user: string) => Promise<{ posts: Array<{ url: string; title: string }> }>;
+const blogAsk: BlogAsk = (system, user) => askJson("code:blog-find", system, user, BLOG_SCHEMA, { webSearch: true });
+const PROBLEM_SITES = /(^|\.)(acmicpc\.net|programmers\.co\.kr|codeforces\.com|atcoder\.jp|swexpertacademy\.com|leetcode\.com|softeer\.ai)$/i;
+
+/** 코드가 본다: 문제 글처럼 보이나(입력 · 출력이 다 있고 짧지 않음). */
+export const looksLikeProblem = (text: string) => text.replace(/\s+/g, "").length >= 300 && /입력|input/i.test(text) && /출력|output/i.test(text);
+
+/** 문제 사이트로 못 읽은 문제를 블로그 글에서 찾는다. 못 찾으면 null. what = 문제를 알 수 있는 말(번호 · 이름 · 주소). */
+export async function problemFromBlogs(what: string, ask: BlogAsk = blogAsk, fetcher: Fetcher = fetch): Promise<Resolved | null> {
+  const q = what.replace(/\s+/g, " ").trim().slice(0, 300);
+  if (!q) return null;
+  note("문제 사이트에서 못 찾아서, 그 문제 글이 있는 블로그를 찾고 있어요");
+  const reply = await ask(BLOG_SYSTEM, `[찾을 문제] ${q}`).catch(() => ({ posts: [] }));
+  const seen = new Set<string>();
+  const urls = (reply.posts ?? []).map((x) => (x.url ?? "").trim()).filter((u) => {
+    let host = ""; try { host = new URL(u).host; } catch { return false; }
+    const key = u.replace(/[?#].*$/, "").replace(/\/$/, "");
+    if (!/^https?:\/\//i.test(u) || PROBLEM_SITES.test(host) || seen.has(key)) return false;
+    seen.add(key); return true;
+  }).slice(0, 5);
+  if (!urls.length) { note("문제 글이 있는 블로그를 찾지 못했어요"); return null; }
+  for (const url of urls) {
+    const host = (() => { try { return new URL(url).host; } catch { return url.slice(0, 40); } })();
+    note(`블로그 글을 읽고 있어요: ${host}`);
+    const page = await fetchPage(readableUrl(url), fetcher).catch(() => null);
+    if (!page || unusable(page) || !looksLikeProblem(page.text)) continue;
+    note(`블로그 글에서 문제를 찾았어요: ${page.title || host}`);
+    return { lesson: `[블로그에서 가져온 문제 글] ${page.title}\n${url}\n\n${page.text}`, title: page.title || q, url, via: "blog" };
+  }
+  note(`블로그 글 ${urls.length}개를 열어 봤지만 문제 글이 없었어요`);
+  return null;
 }

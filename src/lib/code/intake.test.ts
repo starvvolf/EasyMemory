@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fromOf, settle } from "./intake.ts";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fromOf, intake, settle } from "./intake.ts";
 
 const r = (o: Record<string, unknown>) => ({ route: "find", say: "", kind: "full", lang: "", from: "", lesson: "", assumed: [], candidates: [], ...o }) as Parameters<typeof settle>[0];
 const none = new Set<string>();
@@ -44,4 +47,16 @@ test("다른 사이트 문제의 번호를 백준 번호로 쓰지 않는다 (SW
     { title: "A+B", number: "1000", url: "", site: "백준", why: "", level: "", pattern: "" },
   ] }), { text: "삼성 SW 아카데미 D1 문제" }, new Set(["2068"]));
   assert.deepEqual(out.candidates?.map((c) => [c.number, c.url.slice(0, 30)]), [["", "https://swexpertacademy.com/ma"], ["1260", "https://www.acmicpc.net/proble"], ["1000", "https://www.acmicpc.net/proble"]]);
+});
+
+// 11/18: 이름으로 가리킨 문제를 문제 사이트에서 못 찾으면 블로그에서 → 그래도 없으면 비슷한 후보 + 다른 선택지(missed)
+test("이름으로 못 찾은 문제: 블로그 글이 있으면 그 글로, 없으면 missed", async () => {
+  process.env.STUDY_FORGE_DATA_DIR = await mkdtemp(path.join(tmpdir(), "intake-"));
+  const ask = async () => ({ route: "named" as const, say: "", kind: "full" as const, lang: "" as const, from: "", lesson: "", assumed: [], candidates: [] });
+  const viaBlog = await intake({ text: "어느 대회 바이러스 문제" }, ask, async () => ({ lesson: "x", title: "t", url: "https://velog.io/@c/2606", via: "blog" as const }));
+  assert.equal(viaBlog.route, "named");
+  assert.equal(viaBlog.from, "https://velog.io/@c/2606");
+  const none = await intake({ text: "어느 대회 바이러스 문제" }, ask, async () => null);
+  assert.equal(none.route, "find");
+  assert.equal(none.missed, "어느 대회 바이러스 문제");
 });

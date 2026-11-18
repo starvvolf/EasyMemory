@@ -120,7 +120,7 @@ function Calibrated() {
 }
 
 type Found = { title: string; number: string; url: string; site: string; why: string; level: string; pattern: string };
-type Intake = { route: "image" | "paste" | "named" | "find"; say: string; kind: "full" | "blank"; lang?: Lang; from?: string; lesson?: string; assumed?: string[]; candidates?: Found[] };
+type Intake = { route: "image" | "paste" | "named" | "find"; say: string; kind: "full" | "blank"; lang?: Lang; from?: string; lesson?: string; assumed?: string[]; candidates?: Found[]; missed?: string };
 /** 캡처를 보내기 좋게 줄인다(긴 변 1600px JPEG, 본문 1MB 제한 안으로). */
 async function shrinkImage(file: Blob): Promise<string> {
   const url = URL.createObjectURL(file);
@@ -176,12 +176,12 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
     setError("");
     try { setImage(await shrinkImage(file)); } catch (e) { setError(errorText(e)); }
   };
-  const make = async (args: { from?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; again?: boolean; job?: string; hint?: string }) => {
+  const make = async (args: { from?: string; lesson?: string; topic?: string; kind: "full" | "blank"; lang?: Lang; again?: boolean; job?: string; hint?: string }) => {
     setBusy("make"); setError(""); setExisting(null); setUnread(null);
     try {
       const lang = args.kind === "blank" ? args.lang ?? storedLang() : undefined;
       const made = await call<{ problem?: { id: string }; existing?: { id: string; title: string; createdAt: string; count: number }; unreadable?: { reason: string; from: string } }>("/api/code/make",
-        { job: args.job ?? jobRef(), ...(args.from ? { from: args.from } : {}), ...(args.lesson ? { lesson: args.lesson } : {}), kind: args.kind, ...(lang ? { lang } : {}), ...(args.again ? { again: true } : {}) });
+        { job: args.job ?? jobRef(), ...(args.from ? { from: args.from } : {}), ...(args.hint ? { hint: args.hint.slice(0, 300) } : {}), ...(args.topic ? { topic: args.topic.slice(0, 300) } : {}), ...(args.lesson ? { lesson: args.lesson } : {}), kind: args.kind, ...(lang ? { lang } : {}), ...(args.again ? { again: true } : {}) });
       if (made.unreadable) setUnread({ ...made.unreadable, hint: args.hint || made.unreadable.from });
       else if (made.existing) setExisting({ ...made.existing, from: args.from ?? "" }); else if (made.problem) done(made.problem.id);
     } catch (e) { setError(errorText(e)); } finally { setBusy(""); }
@@ -202,6 +202,10 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
   };
   /** 같은 진행 목록에 이어 적는다(보내기 → 만들기). 후보를 고를 때처럼 새로 시작하면 새 job. */
   function jobRef() { if (job) return job; const id = `j-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; setJob(id); startedAt.current = Date.now(); return id; }
+  /** 선택지(11/18): 직접 넣기 — 캡처 · 문제 글 · 블로그 주소 */
+  const putIn = () => { setUnread(null); setText(""); setPlan(null); setAsk("그 문제를 캡처해서 여기에 Ctrl+V(또는 [캡처 넣기]) 하거나, 문제 글이나 그 문제를 옮겨 적은 블로그 주소를 붙여 넣고 보내 주세요."); boxRef.current?.focus(); };
+  /** 선택지(11/18): 그 문제 이름 · 설명을 주제로 AI가 연습 문제를 새로 만든다(원문이 아니라 비슷한 새 문제). */
+  const makeLike = async (what: string) => { setPlan(null); await make({ topic: `${what.replace(/\s+/g, " ").trim().slice(0, 240)} (이 문제와 같은 생각을 쓰는 연습 문제)`, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); };
   const pick = async (c: Found) => { setPicking(c.url); await make({ hint: [c.title, c.site, c.level, c.pattern].filter(Boolean).join(" · "), from: c.number && /acmicpc\.net/.test(c.url) ? c.number : c.url, kind: plan?.kind ?? "full", ...(plan?.lang ? { lang: plan.lang } : {}) }); setPicking(""); };
   const working = busy === "route" ? (image ? "캡처를 읽는 중… (10~30초)" : "무엇을 할지 보는 중… (5~30초)")
     : busy === "make" ? (plan?.route === "named" ? "문제를 가져오는 중… (백준 문제는 몇 초면 열려요)" : "문제를 만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "";
@@ -238,12 +242,21 @@ function MakeProblem({ onMade }: { langs: LangInfo[]; onMade: (id: string) => vo
             <button className="btn small" disabled={Boolean(picking) || Boolean(busy)} onClick={() => void pick(c)}>{picking === c.url ? "가져오는 중…" : "이걸로 풀기"}</button>
           </li>))}
         </ul>) : <p className="small muted">새로 고를 만한 문제를 못 찾았어요. 말을 조금 바꿔서 다시 보내 봐요.</p>) : null}
+      {plan?.route === "find" && plan.missed ? (
+        <div className="stack small" style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+          <span>{plan.candidates?.length ? "위의 비슷한 문제 중에서 고르거나, 다른 방법을 골라 주세요." : "다른 방법을 골라 주세요."}</span>
+          <div className="row">
+            <button className="btn small" disabled={Boolean(busy)} onClick={putIn}>캡처나 글 · 주소 넣기</button>
+            <button className="btn small" disabled={Boolean(busy)} onClick={() => void makeLike(plan.missed!)}>이 문제를 바탕으로 연습 문제 만들기</button>
+          </div>
+        </div>) : null}
       {unread ? (
         <div className="stack small" style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
-          <span>{unread.reason} 문제 글을 못 읽었어요. 어떻게 할까요?</span>
+          <span>{unread.reason} 문제 글을 가져오지 못했어요. 어떻게 할까요?</span>
           <div className="row">
             <button className="btn primary small" disabled={Boolean(busy)} onClick={() => void send(`이 문제와 비슷한 문제를 찾아 줘: ${unread.hint}. 못 읽은 주소(${unread.from})와 같은 사이트 말고, 백준 문제로.`)}>비슷한 문제 가져오기</button>
-            <button className="btn small" disabled={Boolean(busy)} onClick={() => { setUnread(null); setText(""); setPlan(null); setAsk("그 문제를 캡처해서 여기에 Ctrl+V(또는 [캡처 넣기]) 하거나, 문제 글을 복사해 붙여 넣고 보내 주세요."); boxRef.current?.focus(); }}>캡처나 글 넣기</button>
+            <button className="btn small" disabled={Boolean(busy)} onClick={putIn}>캡처나 글 · 주소 넣기</button>
+            <button className="btn small" disabled={Boolean(busy)} onClick={() => void makeLike(unread.hint)}>이 문제를 바탕으로 연습 문제 만들기</button>
           </div>
         </div>) : null}
       {ask ? <p className="small">{ask}</p> : null}

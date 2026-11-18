@@ -1,7 +1,7 @@
 // 주소로 문제 가져오기: a fake network — the archive, a Baekjoon original, blog pages — and what reaches the problem maker.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { UnreadableSource, bojNumberOf, readableUrl, resolveSource } from "./source.ts";
+import { UnreadableSource, bojNumberOf, looksLikeProblem, problemFromBlogs, readableUrl, resolveSource } from "./source.ts";
 
 const BOJ = (n: string) => `<html><head><title>${n}번: 회사에 있는 사람</title></head><body><span id="problem_title">회사에 있는 사람</span>
 <div id="problem_description"><p>출입 기록이 주어질 때 회사에 남아 있는 사람을 구하라. 1 ≤ n ≤ 10<sup>6</sup></p></div>
@@ -103,4 +103,24 @@ test("when the closest-copy lookup answers empty, the list of copies is asked (w
   assert.match(seen[1], /cdx\/search\/cdx\?url=acmicpc\.net%2Fproblem%2F1920/);
   const none = async (url: string) => url.includes("/cdx/") ? Response.json([]) : Response.json({ archived_snapshots: {} });
   assert.equal(await archivedUrl("https://www.acmicpc.net/problem/1", none), null);
+});
+
+// 11/18: 문제 사이트에 없으면 블로그에서 — AI가 준 주소 중 문제 사이트는 빼고, 코드가 열어 문제 글처럼 보이는 첫 글을 쓴다.
+test("블로그에서 문제 글 찾기: 문제 사이트 주소는 빼고, 글이 없거나 문제 글이 아니면 다음 글로", async () => {
+  const STATEMENT = `문제\n어떤 컴퓨터가 바이러스에 걸렸을 때 같이 걸리는 컴퓨터 수를 구한다. ${"설명 ".repeat(150)}\n입력\n첫째 줄에 컴퓨터 수\n출력\n걸리는 컴퓨터 수\n예제 입력 1\n7\n예제 출력 1\n4`;
+  const { fetcher, seen } = net({
+    "https://a.tistory.com/1": () => html("2606 풀이", "짧음"),
+    "https://b.tistory.com/2": () => html("2606 풀이", LONG),
+    "https://velog.io/@c/2606": () => html("[백준] 2606 바이러스", STATEMENT),
+  });
+  const ask = async () => ({ posts: [{ url: "https://www.acmicpc.net/problem/2606", title: "원문" }, { url: "https://a.tistory.com/1", title: "" }, { url: "https://b.tistory.com/2", title: "" }, { url: "https://velog.io/@c/2606", title: "" }] });
+  const got = await problemFromBlogs("2606 · 바이러스", ask, fetcher);
+  assert.equal(got?.via, "blog");
+  assert.equal(got?.url, "https://velog.io/@c/2606");
+  assert.match(got?.lesson ?? "", /블로그에서 가져온 문제 글[\s\S]*입력[\s\S]*출력/);
+  assert.ok(!seen.some((u) => u.includes("acmicpc")), "문제 사이트 주소는 열지 않는다");
+  assert.equal(await problemFromBlogs("2606", async () => ({ posts: [] }), fetcher), null);
+  assert.equal(await problemFromBlogs("2606", async () => ({ posts: [{ url: "https://b.tistory.com/2", title: "" }] }), fetcher), null);
+  assert.equal(looksLikeProblem(LONG), false);
+  assert.equal(looksLikeProblem(STATEMENT), true);
 });
