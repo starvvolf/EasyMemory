@@ -416,7 +416,7 @@ function FollowView({ problemId }: { problemId: string }) {
   if (!f?.segments?.length) return null;
   const span = (xs: number[]) => (xs.length > 1 ? `#${Math.min(...xs)}~#${Math.max(...xs)}` : xs.length ? `#${xs[0]}` : "");
   return <details className="sc-follow">
-    <summary className="small"><b>생각의 흐름</b> <span className="muted">막힌 곳마다 끊은 생각 묶음 {f.segments.length}개</span></summary>
+    <summary className="small"><b>생각의 흐름</b> <span className="muted">막힌 구간 {f.segments.length}개</span></summary>
     {f.toc?.length ? <p className="small"><b>목차</b> {f.toc.map((p) => `${p.part} ${p.subs.length > 1 ? p.subs.map((x) => `(${x.items.length})`).join("") : `(${p.subs.reduce((n, x) => n + x.items.length, 0)})`}`).join(" / ")}</p> : null}
     <ol className="sc-gaplist">{f.segments.map((g, i) => <li key={i}>
       <div className="sc-gapline"><span className="sc-chip">{span(g.moments)}</span><span className="small">{g.thinking}</span></div>

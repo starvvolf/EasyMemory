@@ -136,7 +136,7 @@ export async function runRecaller(ctx: RecallerContext) {
     }
     if (!d.skeleton.topics.length) {
       d.skeleton.topics = fallbackTopics(state.sections, Number.parseInt(data.pdfHash.slice(0, 6), 16) || 0);
-      d.skeleton.problems.push("줄기를 받지 못해 전처리 구역으로 나눴어요.");
+      d.skeleton.problems.push("생성 계획을 받지 못해 전처리 구역으로 나눴어요.");
     }
     d.skeleton.status = "done";
     d.skeleton.ms = d.timing.skeletonMs = Date.now() - t0;
@@ -211,7 +211,7 @@ export async function runRecaller(ctx: RecallerContext) {
     let plan = settlePlan(await askPlan(1, STEM_PLAN_LINES, user, input.pageNumbers), input.pageNumbers);
     // 줄이 하나도 없으면 한 번 더, 그래도 없으면 멈춘다.
     if (!plan.areas.length || !plan.memories.length) plan = settlePlan(await askPlan(3, STEM_PLAN_LINES, user, input.pageNumbers), input.pageNumbers);
-    if (!plan.areas.length || !plan.memories.length) throw new Error("줄기 계획에서 영역·기억 줄을 읽지 못했어요.");
+    if (!plan.areas.length || !plan.memories.length) throw new Error("생성 계획에서 영역·기억 줄을 읽지 못했어요.");
     const miss = missingPages(plan, input.pageNumbers);
     if (miss.length) {
       try {

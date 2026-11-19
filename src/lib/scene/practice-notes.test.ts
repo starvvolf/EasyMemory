@@ -27,3 +27,14 @@ test("개념 글에서 코드 블록은 걷어내고, 빈 개념 · 없는 순�
   assert.equal(out.lessons[0].principle, "with로 열면 다 쓴 뒤 저절로 닫힌다.");
   assert.deepEqual(out.lessons[0].moments, [2]);
 });
+
+test("교과서식 정리(11/20): 코드 칸은 코드 그대로(울타리만 걷음), 끝 정리는 있는 개념 이름만", () => {
+  const out = cleanNotes({ made: "단어 세는 프로그램", intro: "파일을 읽어 단어를 센다.", lessons: [
+    { title: "파일 열기", concept: "파일은 열어야 읽을 수 있다.", why: "닫지 않으면 자원이 남는다.", how: "1. 연다\n2. 읽는다", code: "```python\nwith open('a.txt') as f:\n    data = f.read()\n```",
+      codeNote: "with 줄이 파일을 연다.", inPractice: "글자 수를 셌다.", remember: "with로 열면 저절로 닫힌다", moments: [1] },
+  ], summary: [{ title: "파일 열기", line: "with로 연다" }, { title: "없는 개념", line: "빠져야 함" }] }, 3);
+  assert.equal(out.intro, "파일을 읽어 단어를 센다.");
+  assert.equal(out.lessons[0].code, "with open('a.txt') as f:\n    data = f.read()");
+  assert.equal(out.lessons[0].how, "1. 연다\n2. 읽는다");
+  assert.deepEqual(out.summary, [{ title: "파일 열기", line: "with로 연다" }]);
+});

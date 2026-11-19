@@ -274,7 +274,7 @@ function ThinkingOrbs({ lines = ORB_LINES }: { lines?: string[] }) {
   useEffect(() => { const t = setInterval(() => setI((x) => (x + 1) % lines.length), 2600); return () => clearInterval(t); }, [lines.length]);
   return <div className="orbs-wrap" role="status" aria-live="polite">
     <div className="orbs" aria-hidden><span /><span /><span /></div>
-    <p className="orbs-title">줄기를 잡고 있어요</p>
+    <p className="orbs-title">생성 계획을 세우고 있어요</p>
     <p key={i} className="orbs-line">{lines[i]}…</p>
   </div>;
 }
@@ -291,11 +291,11 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
   const make = () => { setBusy(true); setError("");
     call<{ compact: CompactLite }>(`/api/study-map/${genId}/compact`, {}).then((r) => setData(r.compact)).catch((e) => setError(errorText(e))).finally(() => setBusy(false)); };
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
-  const btn = (label: string, primary: boolean) => <button className={`btn small ${primary ? "primary" : "ghost"}`} disabled={busy || making} onClick={make} title="카드를 영역·기억으로 묶어요. AI 영역 1번 + 영역마다 1번(동시), 약 30초">{busy ? "줄기를 만드는 중… (약 30초)" : label}</button>;
+  const btn = (label: string, primary: boolean) => <button className={`btn small ${primary ? "primary" : "ghost"}`} disabled={busy || making} onClick={make} title="카드를 영역·기억으로 묶어요. AI 영역 1번 + 영역마다 1번(동시), 약 30초">{busy ? "생성 계획을 만드는 중… (약 30초)" : label}</button>;
   if (data === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
   if (busy) return <ThinkingOrbs />;
   if (!data) return <>
-    <div className="row small mm8-goalbar"><span className="muted">카드 {cards.filter((c) => !isFlowCard(c)).length}장을 외울 단위(알고리즘은 한 장)로 묶어 줄기로 볼 수 있어요.</span><span className="cs-gap" />{btn("줄기 만들기", true)}</div>
+    <div className="row small mm8-goalbar"><span className="muted">카드 {cards.filter((c) => !isFlowCard(c)).length}장을 외울 단위(알고리즘은 한 장)로 묶어 생성 계획으로 볼 수 있어요.</span><span className="cs-gap" />{btn("생성 계획 만들기", true)}</div>
     {error ? <p className="small bad">{error}</p> : null}
     <OutlinePane {...props} /></>;
   const pagesOf = (m: MemoryLite) => [...new Set(m.cards.flatMap((id) => byId.get(id)?.pages ?? []))].sort((a, b) => a - b);
@@ -493,7 +493,7 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
   return (
     <div className={`mm8${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("[data-c],button,a,input,label,.mm8-detail")) setOpen(null); }}>
       <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 카드를 열면 다른 묶음의 짝</span><span className="cs-gap" />
-        {data?.stale ? <span className="small bad">{s?.unit === "memory" ? "줄기가 바뀌었어요" : "줄기나 카드가 바뀌었어요"}</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
+        {data?.stale ? <span className="small bad">{s?.unit === "memory" ? "생성 계획이 바뀌었어요" : "생성 계획이나 카드가 바뀌었어요"}</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
       {error ? <p className="small bad">{error}</p> : null}
       {/* 11/8 사용자 "눌렀을 때 아래 칸이 덮어서 다시 누를 수 없다": 빈 곳을 누르면 닫히고, 연 카드는 아래 칸 위로 보이게 굴린다. */}
       <div className="mm8-wrap" ref={wrap} onMouseLeave={() => setHover(null)} onMouseOver={(e) => {
@@ -990,7 +990,7 @@ export default function MaterialMap({ genId, onPage, extra }: { genId: string; o
       : [{ label: "자료 읽기", state: (digest?.skeleton || cardsN || summary?.text ? "done" : "now") as Step["state"] }]),
     ...(summary ? [{ label: "요약", state: (summary.status === "done" || summary.status === "failed" ? "done" : summary.status === "writing" ? "now" : running ? "wait" : "done") as Step["state"],
       note: summary.status === "failed" ? "못 씀" : summary.ms ? `${Math.round(summary.ms / 1000)}초` : undefined }]
-      : [{ label: digest?.skeleton ? "줄기" : "목차", state: (digest?.skeleton?.status === "done" ? "done" : digest?.skeleton?.text ? "now" : running ? "now" : "done") as Step["state"],
+      : [{ label: digest?.skeleton ? "생성 계획" : "목차", state: (digest?.skeleton?.status === "done" ? "done" : digest?.skeleton?.text ? "now" : running ? "now" : "done") as Step["state"],
         note: digest?.skeleton?.topics.length ? `주제 ${digest.skeleton.topics.length}` : undefined }]),
     { label: "기억 카드", state: !running || map?.topics?.length ? "done" : cardsN || digest?.skeleton?.status === "done" ? "now" : "wait",
       note: cardsN ? `${cardsN}개` : undefined },
@@ -999,7 +999,7 @@ export default function MaterialMap({ genId, onPage, extra }: { genId: string; o
   ];
   // 목차가 있으면(엔진의 목차 → 카드) 첫 탭은 목차, 예전 실행의 정리 글은 요약으로 그대로 보인다.
   const hasOutline = Boolean(digest?.skeleton && (digest.skeleton.topics.length || digest.skeleton.text));
-  const firstLabel = summary && !hasOutline ? "요약" : "줄기";
+  const firstLabel = summary && !hasOutline ? "요약" : "생성 계획";
   const noFirst = digest !== undefined && summary !== undefined && !hasOutline && !(summary && (summary.text || summary.status === "writing"));
   const picked = (tab === "structure" && !(hasOutline || !summary)) || ((tab === "lecture" || tab === "flash") && running) || (tab === "flash" && !embedded) ? null : tab;
   const knowTab = !embedded || running || noFirst;
