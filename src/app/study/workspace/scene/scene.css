@@ -110,3 +110,25 @@ pre.bad, .sc-err { color: var(--bad); }
 .pn-keep .pn-lab { color: var(--accent); }
 .pn-keep p:last-child { margin: 0; font-size: 14.5px; font-weight: 700; line-height: 1.6; color: var(--ink); }
 .pn-at { margin: 0; text-align: right; }
+.pn-intro { margin: 0; font-size: 15px; line-height: 1.8; color: var(--ink); background: var(--surface-2); box-shadow: none; }
+.pn-pre { white-space: pre-line; }
+.pn-code pre { margin: 0; padding: 12px 14px; border-radius: 10px; background: #0f172a; color: #e2e8f0; font: 13px/1.6 ui-monospace, Consolas, monospace; overflow-x: auto; white-space: pre; }
+.pn-codenote { margin-top: 8px !important; color: var(--muted); }
+.pn-sum table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pn-sum th, .pn-sum td { text-align: left; vertical-align: top; padding: 8px 10px; border-top: 1px solid var(--line); line-height: 1.6; }
+.pn-sum th { width: 28%; font-weight: 800; color: var(--ink); }
+.pn-inl { font: 0.92em ui-monospace, Consolas, monospace; padding: 1px 5px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); }
+.pn-head .btn { flex: none; white-space: nowrap; }
+/* 11/20 사용자: 칸 이름(헤더)마다 색과 상자를 입혀 한눈에 구분 */
+.pn-box { padding: 11px 14px; border-radius: 10px; border-left: 4px solid var(--line-strong); background: var(--surface-2); }
+.pn-box .pn-lab { font-size: 12px; }
+.pn-def { border-left-color: var(--ink); }
+.pn-def .pn-lab { color: var(--ink); }
+.pn-def .pn-concept { font-size: 15px; }
+.pn-why { background: var(--ask-soft); border-left-color: var(--ask); }
+.pn-why .pn-lab { color: var(--ask); }
+.pn-how { background: var(--help-soft); border-left-color: var(--help); }
+.pn-how .pn-lab { color: var(--help); }
+.pn-code { background: var(--surface-2); border-left-color: var(--mark); }
+.pn-code .pn-lab { color: var(--mark); }
+.pn-here { border-left: 4px solid var(--read); }

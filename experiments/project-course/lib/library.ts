@@ -31,6 +31,8 @@ export async function libraryRun(runId: string) {
       const r = [...h].reverse().find((x) => x.by === "learner" && x.code === 0 && x.out.trim()); return r ? { command: r.command.slice(0, 120), out: r.out.trim().split("\n").slice(-10).join("\n").slice(-600) } : null; })(),
     goals: recs.map((x) => ({ goal: x.goal, done: x.done, status: x.status, summary: x.summary, steps: x.steps, from: x.from, to: x.to,
       review: x.review ?? null, cards: (x.cards ?? []).map((c) => ({ name: c.name, situation: c.situation, did: c.did, quote: c.verified ? c.quote : "", learned: c.learned, next: c.next, how: c.how, recheck: c.recheck?.q ?? "" })) })),
+    // 실습 정리(교과서식, 11/20): 이 실습에서 저장한 코드 파일의 마지막 모습(핵심 로직을 코드 칸에 고르게)
+    code: await finalCode(runId).catch(() => [] as { file: string; text: string }[]),
     path: note?.path ?? [], moments: ms.moments, chunks, ongoing: await GR.ongoingOf(runId).catch(() => null), scenes: await scenesOf(runId, recs.map((x) => ({ goal: x.goal, from: x.from, to: x.to }))),
   };
 }
@@ -83,5 +85,43 @@ export async function scenesOf(runId: string, recs: { goal: string; from: string
   let g = 0;
   const out = chapters.filter((c) => c.events.length);
   for (const c of out) for (const e of c.events) e.g = g++;
+  return out;
+}
+
+/** 이 실습 작업 폴더의 소스 파일 지금 모습(11/20: 저장 기록에는 편집기 밖에서 고친 파일이 빠져 결제 서버 실습의 핵심 코드가 없었다).
+ * 저장 기록에 있는 파일을 먼저, 그다음 작업 폴더의 다른 소스 파일을 최근에 고친 순으로. 빌드 · 패키지 폴더는 건너뛴다.
+ * 8개 · 파일당 200줄 · 합쳐 24,000자까지. 코드만, AI 없음. */
+const SRC = /\.(java|kt|cs|py|js|jsx|ts|tsx|go|rs|c|cc|cpp|h|hpp|rb|php|swift|sql)$/i;
+const SKIP_DIR = new Set(["node_modules", ".git", "build", "target", "bin", "obj", "out", "dist", ".gradle", ".idea", ".vscode", "__pycache__", ".venv", "venv", ".next", "postgres-data"]);
+export async function finalCode(runId: string) {
+  const { readFile, readdir, stat } = await import("node:fs/promises"), path = await import("node:path");
+  const ws = await (await import("./goals.ts")).runWorkspace(runId);
+  if (!ws) return [];
+  const root = path.resolve(ws);
+  const found: { rel: string; mtime: number }[] = [];
+  const walk = async (dir: string, depth: number) => {
+    if (depth > 8 || found.length > 400) return;
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (e.isDirectory()) { if (!SKIP_DIR.has(e.name) && !e.name.startsWith(".")) await walk(path.join(dir, e.name), depth + 1); continue; }
+      if (!e.isFile() || !SRC.test(e.name) || /\.test\.|Test\.java$|\.d\.ts$/.test(e.name)) continue;
+      const abs = path.join(dir, e.name);
+      const st = await stat(abs).catch(() => null);
+      if (st && st.size < 200_000) found.push({ rel: path.relative(root, abs).split(path.sep).join("/"), mtime: st.mtimeMs });
+    }
+  };
+  await walk(root, 0);
+  const saved = (await (await import("./goal-record.ts")).savesOf(runId).catch(() => [])).map((x) => x.file.replace(/\\/g, "/"));
+  const rank = (r: string) => (saved.includes(r) ? 1 : 0);
+  found.sort((a, b) => rank(b.rel) - rank(a.rel) || b.mtime - a.mtime);
+  const out: { file: string; text: string }[] = [];
+  let size = 0;
+  for (const f of found) {
+    if (out.length >= 8) break;
+    const text = await readFile(path.join(root, f.rel), "utf8").catch(() => null);
+    if (text == null || !text.trim()) continue;
+    const t = text.split(/\r?\n/).slice(0, 200).join("\n");
+    if (size + t.length > 24_000) continue;
+    size += t.length; out.push({ file: f.rel, text: t });
+  }
   return out;
 }
