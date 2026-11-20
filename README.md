@@ -44,8 +44,10 @@ AI와 공부한 것을 **기억**으로 쌓고, 그 기억을 바탕으로 복�
 
 ### 2. 받기
 
-- Git이 있으면: `git clone <이 저장소 주소>`
-- 없으면: GitHub 페이지의 **Code → Download ZIP**으로 받아 풀어 둡니다. 폴더 이름 · 위치는 마음대로 해도 됩니다.
+저장소: https://github.com/starvvolf/EasyMemory/tree/recaller/v3-release (`recaller/v3-release` 브랜치)
+
+- Git이 있으면: `git clone -b recaller/v3-release https://github.com/starvvolf/EasyMemory.git`
+- 없으면: 위 주소의 **Code → Download ZIP**으로 받아 풀어 둡니다. 폴더 이름 · 위치는 마음대로 해도 됩니다.
 
 ### 3. 켜기
 
